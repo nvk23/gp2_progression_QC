@@ -10,9 +10,6 @@ import plotly.express as px
 import plotly.io as pio
 import seaborn as sns
 import datetime
-import csv
-from PIL import Image
-from io import StringIO
 # from google.cloud import storage
 
 from utils.app_setup import config_page

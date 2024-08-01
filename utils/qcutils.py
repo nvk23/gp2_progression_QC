@@ -85,33 +85,6 @@ def detect_multiple_clindups(df):
               )
   st.stop()
 
-
-# def sample_type_fix(df, allowed_samples):
-#   allowed_samples_strp = [samptype.strip().replace(" ", "") for samptype in allowed_samples]
-  
-#   sampletype = df.sample_type.copy()
-#   sampletype = sampletype.str.replace(" ", "")
-#   map_strip_orig = dict(zip(sampletype.unique(), df.sample_type.unique()))
-#   not_allowed_v2 = list(np.setdiff1d(sampletype.unique(), allowed_samples_strp))
-  
-#   if len(not_allowed_v2)>0:
-#     st.text('WE have found unknown sample types')
-#     st.text('Writing entries with sample_type not allowed')
-#     all_unknwown = []
-#     for stripval, origval in map_strip_orig.items():
-#       if stripval in not_allowed_v2:
-#         all_unknwown.append(origval)
-#     st.error(f'We could not find the following codes {all_unknwown}') 
-#     st.error(f'Printing the list of allowed samples types for reference {allowed_samples}')
-#     st.stop()
-#   else:
-#     st.text('We have found some undesired whitespaces in some sample type values')
-#     st.text('Processing whitespaces found in certain sample_type entries')
-#     stype_map = dict(zip(allowed_samples_strp, allowed_samples))
-#     newsampletype = sampletype.replace(stype_map)
-#     df['sample_type'] = newsampletype
-#     st.text('sample type count after removing undesired whitespaces')
-#     st.write(df.sample_type.astype('str').value_counts())
 def sample_type_fix(df, allowed_samples, col):
   allowed_samples_strp = [samptype.strip().replace(" ", "") for samptype in allowed_samples]
   

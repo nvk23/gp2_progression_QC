@@ -4,14 +4,12 @@ import subprocess
 import numpy as np
 import pandas as pd
 import streamlit as st
-from io import StringIO
 from functools import reduce
-import re
 
 from utils.app_setup import config_page
-from utils.writeread import read_file, to_excel, get_studycode
+from utils.writeread import read_file, get_studycode
 from utils.qcutils import checkNull, subsetData, checkDup, create_survival_df
-from utils.plotting import aggridPlotter, plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ''
@@ -19,7 +17,8 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ''
 config_page('Hoehn & Yahr QC')
 
 # Necessary paths - Update Template
-template_link = 'https://docs.google.com/spreadsheets/d/1tTkVcfP8l37uN09vGMNWiPQKBESRQGCrTZLdvR7rVQw/edit?usp=sharing'
+# template_link = 'https://docs.google.com/spreadsheets/d/1tTkVcfP8l37uN09vGMNWiPQKBESRQGCrTZLdvR7rVQw/edit?usp=sharing'
+template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
 data_file = st.sidebar.file_uploader("Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
 master_path = 'data/master_key.csv'
 study_name = get_studycode(master_path) # initializes study_name to None
@@ -162,7 +161,7 @@ if data_file is not None and study_name is not None:
                                                     on = ['clinical_id', 'visit_month'],
                                                     how = 'outer'), st.session_state['data_chunks'])
             
-            ### Move to the end
+            ## Move to the end
             # st.session_state['clinqc'] = final_df
 
             # aggridPlotter(final_df)
@@ -222,7 +221,7 @@ if data_file is not None and study_name is not None:
         strat_val = {'Study Arm': 'study_arm', 'GP2 Phenotype': 'GP2_phenotype'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(), index = 0, label_visibility = 'collapsed')
         selected_strata = strat_val[strata]
-        btn2 = plot2.button('Continue', key = 'continue_plot', on_click = callback1)
+        btn2 = plot2.button('Continue', key = 'continue_plot', on_click = plot_callback1)
 
         if st.session_state['plot_val']:
             plot_interactive_visit_month(df_final, get_varname, selected_strata)
