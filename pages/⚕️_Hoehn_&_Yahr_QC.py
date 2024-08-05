@@ -6,10 +6,11 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from utils.app_setup import config_page
-from utils.writeread import read_file, get_studycode, send_email, upload_data
-from utils.qcutils import checkNull, subsetData, checkDup, create_survival_df
-from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+sys.path.append('utils')
+from app_setup import config_page
+from writeread import read_file, get_studycode, send_email, upload_data
+from qcutils import checkNull, subsetData, checkDup, create_survival_df
+from plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ''
@@ -30,7 +31,7 @@ optional_cols =  ['clinical_state_on_medication', 'hoehn_and_yahr_stage']
 outcomes = ['Original HY Scale', 'Modified HY Scale']
 outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage'} # add Modified here when figure out template col name
 
-# Necessary session state initializiation/methods
+# Necessary session state initializiation/methods - can move to app_setup
 if 'data_chunks' not in st.session_state:
     st.session_state['data_chunks'] = []
 if 'btn' not in st.session_state:
@@ -44,6 +45,7 @@ if 'upload_bucket' not in st.session_state:
 if 'variable' not in st.session_state:
     st.session_state['variable'] = outcomes
 
+# can move to app_setup
 def callback1():
     st.session_state['btn'] = True
 def plot_callback1():
@@ -181,7 +183,7 @@ if data_file is not None and study_name is not None:
                                                     on = ['clinical_id', 'visit_month'],
                                                     how = 'outer'), st.session_state['data_chunks'])
             
-            ## Move to the end if add final download button
+            ## Move to the end if add final download button - remove aggrid dataframe
             # st.session_state['clinqc'] = final_df
 
             # aggridPlotter(final_df)

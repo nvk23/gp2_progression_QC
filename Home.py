@@ -12,7 +12,8 @@ import seaborn as sns
 import datetime
 # from google.cloud import storage
 
-from utils.app_setup import config_page
+sys.path.append('utils')
+from app_setup import config_page
 
 config_page('Home')
 
