@@ -79,14 +79,13 @@ def send_email(studycode, activity, data_path = None):
         part.add_header('Content-Disposition',
                         f'attachment; filename={studycode}_clinical_qc.csv')
         msg.attach(part)
+        os.remove(data_path) # may replace with temp files in the future
 
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(sender, pwd)
     server.sendmail(sender, receiver, msg.as_string())
     server.quit()
-
-    os.remove('data/tmp/*.csv') # may replace with temp files in the future
 
 def upload_data(bucket_name, data, destination):
     """Upload a file to the bucket."""

@@ -56,10 +56,6 @@ def upload_callback1():
     st.session_state['upload_bucket'] = True
 def callback2():
     st.session_state['btn'] = False
-def email_callback2():
-    st.session_state['send_email'] = False
-def upload_callback2():
-    st.session_state['upload_bucket'] = False
 
 # App set-up
 st.markdown('## Hoehn and Yahr QC')
@@ -293,8 +289,9 @@ if data_file is not None and study_name is not None:
                     tmp_path = f'data/tmp/{study_name}_final_qc.csv' # need bytes-like object to send email, not dataframe
                     df_final.to_csv(tmp_path, index = False) # no way to get path from file upload
 
+                    email_form = st.empty()
                     # add form
-                    with st.form("email_gp2"):
+                    with email_form.form("email_gp2"):
                         st.write("#### :red[Send the following email?]")
                         st.markdown("__TO:__ Lietsel Jones (Member of GP2's Cohort Integration Working Group)") # double check this title
                         
@@ -306,15 +303,17 @@ if data_file is not None and study_name is not None:
 
                         send1, send2, send3 = st.columns(3)
                         submitted = send2.form_submit_button("Send", use_container_width = True)
-                        if submitted:
-                            send_email(study_name, 'send_data', tmp_path)
-                            st.success('Email sent, thank you!')
-                            email_callback2()
+                    if submitted:
+                        send_email(study_name, 'send_data', tmp_path)
+                        email_form.empty() # clear form from screen
+                        st.success('Email sent, thank you!')
 
                 yes_col3.button("Submit Data to GP2's Google Bucket", use_container_width = True, on_click = upload_callback1)
                 if st.session_state['upload_bucket']:
+                    upload_form = st.empty()
+
                     # add form
-                    with st.form("upload_gp2"):
+                    with upload_form.form("upload_gp2"):
                         st.write("#### :red[Upload the following data?]")
 
                         st.markdown(f"__GOOGLE CLOUD PROJECT NAME:__ ")
@@ -327,8 +326,8 @@ if data_file is not None and study_name is not None:
                         submitted = send2.form_submit_button("Upload", use_container_width = True)
                         if submitted:
                             upload_data(bucket_name, df_final, bucket_destination) # currently do not have Google Bucket info
+                            upload_form.empty() # clear form from screen
                             st.success('Data uploaded, thank you!')
-                            upload_callback2()
 
             if qc_yesno == 'NO':
                 st.error("Please change any unexpected values in your clinical data and reupload \
