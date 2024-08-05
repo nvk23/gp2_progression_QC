@@ -7,23 +7,26 @@ import streamlit as st
 from functools import reduce
 
 from utils.app_setup import config_page
-from utils.writeread import read_file, get_studycode
+from utils.writeread import read_file, get_studycode, send_email, upload_data
 from utils.qcutils import checkNull, subsetData, checkDup, create_survival_df
 from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ''
+bucket_name = ''
+bucket_destination = ''
 
 config_page('Hoehn & Yahr QC')
 
 # Necessary paths - Update Template
-# template_link = 'https://docs.google.com/spreadsheets/d/1tTkVcfP8l37uN09vGMNWiPQKBESRQGCrTZLdvR7rVQw/edit?usp=sharing'
+# template_link = 'https://docs.google.com/spreadsheets/d/1tTkVcfP8l37uN09vGMNWiPQKBESRQGCrTZLdvR7rVQw/edit?usp=sharing' # old link
 template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
 data_file = st.sidebar.file_uploader("Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
 master_path = 'data/master_key.csv'
 study_name = get_studycode(master_path) # initializes study_name to None
-cols = ['clinical_id', 'visit_month', 'visit_name', 'hoehn_and_yahr_stage']
+# cols = ['clinical_id', 'visit_month', 'clinical_state_on_medication', 'hoehn_and_yahr_stage']
 required_cols =  ['clinical_id', 'visit_month']
+optional_cols =  ['clinical_state_on_medication', 'hoehn_and_yahr_stage']
 outcomes = ['Original HY Scale', 'Modified HY Scale']
 outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage'} # add Modified here when figure out template col name
 
@@ -34,6 +37,10 @@ if 'btn' not in st.session_state:
     st.session_state['btn'] = False
 if 'plot_val' not in st.session_state:
     st.session_state['plot_val'] = False
+if 'send_email' not in st.session_state:
+    st.session_state['send_email'] = False
+if 'upload_bucket' not in st.session_state:
+    st.session_state['upload_bucket'] = False
 if 'variable' not in st.session_state:
     st.session_state['variable'] = outcomes
 
@@ -41,8 +48,16 @@ def callback1():
     st.session_state['btn'] = True
 def plot_callback1():
     st.session_state['plot_val'] = True
+def email_callback1():
+    st.session_state['send_email'] = True
+def upload_callback1():
+    st.session_state['upload_bucket'] = True
 def callback2():
     st.session_state['btn'] = False
+def email_callback2():
+    st.session_state['send_email'] = False
+def upload_callback2():
+    st.session_state['upload_bucket'] = False
 
 # App set-up
 st.markdown('## Hoehn and Yahr QC')
@@ -71,7 +86,7 @@ if data_file is not None and study_name is not None:
 
     id_not_in_GP2 = df[df.GP2ID.isnull()]['clinical_id'].unique()
     if len(id_not_in_GP2) == n:
-        st.error(f'None of the clinical IDs are in the GP2. Please check the clinical IDs and your GP2_study_code ({study_name}) are correct')
+        st.error(f'None of the clinical IDs are in the GP2. Please check that your clinical IDs and selected GP2_study_code ({study_name}) are correct.')
         st.stop()
     elif len(id_not_in_GP2) > 0:
         st.warning(f'Warning: Some clinical IDs are not in the GP2 so the dataset. Dataset review will continue only with GP2 IDs.')
@@ -91,18 +106,23 @@ if data_file is not None and study_name is not None:
         count2.metric(label="Total Observations", value=len(df))
 
     # Check for missing columns compared to template
-    missing_cols = np.setdiff1d(cols, df.columns)
-    if len(missing_cols)>0:
-        st.error(f'{missing_cols} are missing. Please use the template sheet')
+    missing_optional = np.setdiff1d(optional_cols, df.columns)
+    missing_req = np.setdiff1d(required_cols, df.columns)
+    if len(missing_optional)>0:
+        st.warning(f'Warning: The following optional columns are missing: {missing_optional}. \
+                Please use the template sheet if you would like to add these values.')
+    if len(missing_req) > 0:
+        st.error(f'The following required columns are missing: {missing_req}. \
+                Please use the template sheet to add these columns and re-upload.')
         st.stop()
-    else:
-        df_non_miss_check = df[required_cols].copy()
 
+    
     # Required columns checks
+    df_non_miss_check = df[required_cols].copy()
     if df_non_miss_check.isna().sum().sum()>0:
-        st.error(f'There are some missing entries in the required columns {required_cols}. Please fill in the missing cells ')
-        st.write('First ~20 columns with missing data in any required fields')
-        st.write(df_non_miss_check[df_non_miss_check.isna().sum(1)>0].head(20)) # make into dataframe
+        st.error(f'There are missing entries in the required columns {required_cols}. Please fill in the missing cells ')
+        st.markdown('_Missing Values:_')
+        st.dataframe(df_non_miss_check[df_non_miss_check.isna().sum(1)>0])
         st.stop()
 
     # Make sure visit_month and sample_ids are in the right format
@@ -118,11 +138,11 @@ if data_file is not None and study_name is not None:
     
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
     if df.duplicated(subset=['clinical_id', 'visit_month']).sum()>0:
-        st.warning(f'Warning: We have detected duplicated visit months with different visit names. Please review data if this was unintended.') # change warning message
-        # df.loc[df.duplicated(subset='visit_month', keep=False), 'visit_month'] = df['visit_month'].astype(str) + '_' + df['visit_name']
-        if df[['visit_month', 'visit_name']].nunique().values[0] == 1:
-            st.error(f' To allow duplicated visit_month, please fill the visit_name')
-            stopapp=True
+        dup_warn1, dup_warn2 = st.columns([2, 0.5])
+        dup_warn1.warning(f'Warning: We have detected duplicated visit months within samples. Please review data if this was unintended.') # change warning message
+        if dup_warn2.button('View Duplicate Visits'):
+            st.markdown('_Duplicate Visits:_')
+            st.dataframe(df[df[['clinical_id', 'visit_month']].duplicated(keep=False)])
 
     if stopapp:
         st.stop()
@@ -161,7 +181,7 @@ if data_file is not None and study_name is not None:
                                                     on = ['clinical_id', 'visit_month'],
                                                     how = 'outer'), st.session_state['data_chunks'])
             
-            ## Move to the end
+            ## Move to the end if add final download button
             # st.session_state['clinqc'] = final_df
 
             # aggridPlotter(final_df)
@@ -258,10 +278,56 @@ if data_file is not None and study_name is not None:
                                     ["YES", "NO"],
                                     index=None)
             if qc_yesno == 'YES':
-                st.info('Thank you!')
+                st.info('Thank you! Please review the following options:')
                 st.session_state['data_chunks'].append(df_final)
-                st.session_state['variable'].remove(hy_version) # will not work until Modified HY Field is added
-                st.button("QC another variable", on_click=callback2)
+                
+                yes_col1, yes_col2, yes_col3 = st.columns(3) # add download button?
+                if yes_col1.button("QC another variable", use_container_width = True):
+                    st.session_state['variable'].remove(hy_version) # will not work until Modified HY Field is added
+                    callback2()
+                
+                yes_col2.button("Email Data to GP2 Clinical Data Coordinator", use_container_width = True, on_click = email_callback1)
+                if st.session_state['send_email']: # necessary because of nested form/button
+                    tmp_path = f'data/tmp/{study_name}_final_qc.csv' # need bytes-like object to send email, not dataframe
+                    df_final.to_csv(tmp_path, index = False) # no way to get path from file upload
+
+                    # add form
+                    with st.form("email_gp2"):
+                        st.write("#### :red[Send the following email?]")
+                        st.markdown("__TO:__ Lietsel Jones (Member of GP2's Cohort Integration Working Group)") # double check this title
+                        
+                        # can add "change message" option
+                        st.markdown(f"__MESSAGE:__ Hi Lietsel, \nThe {study_name} team has finished QCing their clinical data. See attachment.")
+
+                        st.markdown(f'__ATTACHMENT:__ {study_name}_clinical_qc.csv') # can add "change file name" option
+                        st.dataframe(df_final)
+
+                        send1, send2, send3 = st.columns(3)
+                        submitted = send2.form_submit_button("Send", use_container_width = True)
+                        if submitted:
+                            send_email(study_name, 'send_data', tmp_path)
+                            st.success('Email sent, thank you!')
+                            email_callback2()
+
+                yes_col3.button("Submit Data to GP2's Google Bucket", use_container_width = True, on_click = upload_callback1)
+                if st.session_state['upload_bucket']:
+                    # add form
+                    with st.form("upload_gp2"):
+                        st.write("#### :red[Upload the following data?]")
+
+                        st.markdown(f"__GOOGLE CLOUD PROJECT NAME:__ ")
+                        st.markdown("__BUCKET DESTINATION:__ ")
+
+                        st.markdown(f'__FILE:__ {study_name}_clinical_qc.csv') # can add "change file name" option
+                        st.dataframe(df_final)
+
+                        send1, send2, send3 = st.columns(3)
+                        submitted = send2.form_submit_button("Upload", use_container_width = True)
+                        if submitted:
+                            upload_data(bucket_name, df_final, bucket_destination) # currently do not have Google Bucket info
+                            st.success('Data uploaded, thank you!')
+                            upload_callback2()
+
             if qc_yesno == 'NO':
                 st.error("Please change any unexpected values in your clinical data and reupload \
                          or get in touch with GP2's Cohort Integration Working Group (cohort@gp2.org) if needed.")
