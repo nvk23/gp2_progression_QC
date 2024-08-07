@@ -134,7 +134,7 @@ if data_file is not None and study_name is not None:
         stopapp=True
 
     # Make sure visit month is in the range -1200 <= y <= 1200
-    df_range_check = df[(df.visit_month >= 1200) | (df.visit_month <= -1200)]
+    df_range_check = df[(df.visit_month > 1200) | (df.visit_month < -1200)]
     if df_range_check.shape[0] > 0:
         st.error(f'Please keep the visit month greater than or equal to -1200 and less than or equal to 1200.')
         st.markdown('_Out-of-range Visit Months:_')
@@ -232,7 +232,7 @@ if data_file is not None and study_name is not None:
                 st.dataframe(dups)
 
         # Make sure either HY scale is in the range 0 <= y <= 5
-        var_range_check = df[(df[get_varname] >= 5) | (df[get_varname] <= 0)]
+        var_range_check = df[(df[get_varname] > 5) | (df[get_varname] < 0)]
         if var_range_check.shape[0] > 0:
             st.error(f'Please keep the {get_varname} value greater than or equal to 0 and less than or equal to 5.')
             st.markdown(f'_Out-of-range {get_varname} Values:_')
