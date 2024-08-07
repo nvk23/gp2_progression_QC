@@ -128,10 +128,9 @@ if data_file is not None and study_name is not None:
         df['visit_month'] = df['visit_month'].astype(int)
         stopapp=False
     except:
-        st.error(f'We could not convert visit month to integer')
-        st.error(f'Please check visit month refers to numeric month from Baseline')
-        st.error(f'First ~20 columns with visit_month not converted to integer')
-        st.write(df[df['visit_month'].apply(lambda x: not x.isnumeric())].head(20)) # make into dataframe 
+        st.error(f'We could not convert visit month to integer. Please check visit month refers to numeric month from Baseline.')
+        st.markdown('_Non-Integer Visit Months:_')
+        st.dataframe(df[df['visit_month'].apply(lambda x: not x.isnumeric())])
         stopapp=True
     
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
@@ -148,8 +147,9 @@ if data_file is not None and study_name is not None:
     # Make sure clinical vars are non-negative integers
     for col in outcomes_dict.values():
         if not df[df[col] < 0].shape[0] == 0:
-            st.error(f'We have detected negative values on column {col}')
-            st.error(f' This is likely to be a mistake on the data. Please, go back to the sample manifest and check')
+            st.error(f'We have detected negative values in the {col} column. This is likely to be a mistake in the data.')
+            st.markdown(f'_Negative Values in Column {col}:_')
+            st.dataframe(df[df[col] < 0])
             st.stop()
 
     st.success('Your clinical data has passed all required up-front checks!')
@@ -248,7 +248,7 @@ if data_file is not None and study_name is not None:
             df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
             plot_interactive_first_vs_last(df_sv_temp, df_final, selected_strata)
 
-            # using df_sv, event and censored_months, generate the show KM curve stratifeid by strata
+            # using df_sv, event and censored_months, generate the show KM curve stratified by strata
             # take a threshold input
 
             st.markdown('#### Kaplan-Meier Curve for Reaching the Threshold Score')

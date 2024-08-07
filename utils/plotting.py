@@ -24,13 +24,14 @@ def plot_km_curve(df_sv, strata, threshold, direction):
         kmf.fit(durations=grouped_df['censored_month'], event_observed=grouped_df['event'], label=name)
         event_tables[name] = kmf.event_table['at_risk']
     
-    # Add at risk numbers to the plot
-    for i, (name, event_table) in enumerate(event_tables.items()):
-        times = event_table.index
-        at_risk_counts = event_table.values
-        for j, (time, count) in enumerate(zip(times, at_risk_counts)):
-            ax.annotate(f'{count}', xy=(time, 0.1 - i*0.05), xytext=(time, 0.1 - i*0.05),
-                        textcoords='offset points', fontsize=8, color='black')
+    # Add at risk numbers to the plot - currently not displaying properly
+    # for i, (name, event_table) in enumerate(event_tables.items()):
+    #     times = event_table.index
+    #     at_risk_counts = event_table.values
+    #     for j, (time, count) in enumerate(zip(times, at_risk_counts)):
+    #         ax.annotate(f'{count}', xy=(time, 0.1 - i*0.05), xytext=(time, 0.1 - i*0.05),
+    #                     textcoords='offset points', fontsize=8, color='black')
+
     plt.title(f'Kaplan-Meier Survival Curve: Event = {direction} a Score of {threshold}')
     plt.xlabel('Time (Months)')
     plt.ylabel('Survival Probability')
