@@ -132,6 +132,14 @@ if data_file is not None and study_name is not None:
         st.markdown('_Non-Integer Visit Months:_')
         st.dataframe(df[df['visit_month'].apply(lambda x: not x.isnumeric())])
         stopapp=True
+
+    # Make sure visit month is in the range -1200 <= y <= 1200
+    df_range_check = df[(df.visit_month >= 1200) | (df.visit_month <= -1200)]
+    if df_range_check.shape[0] > 0:
+        st.error(f'Please keep the visit month greater than or equal to -1200 and less than or equal to 1200.')
+        st.markdown('_Out-of-range Visit Months:_')
+        st.dataframe(df_range_check)
+        stopapp=True
     
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
     if df.duplicated(subset=['clinical_id', 'visit_month']).sum()>0:
@@ -146,7 +154,7 @@ if data_file is not None and study_name is not None:
     
     # Make sure clinical vars are non-negative integers
     for col in outcomes_dict.values():
-        if not df[df[col] < 0].shape[0] == 0:
+        if df[df[col] < 0].shape[0] > 0:
             st.error(f'We have detected negative values in the {col} column. This is likely to be a mistake in the data.')
             st.markdown(f'_Negative Values in Column {col}:_')
             st.dataframe(df[df[col] < 0])
@@ -223,6 +231,14 @@ if data_file is not None and study_name is not None:
                 st.markdown('_Duplicate Values:_')
                 st.dataframe(dups)
 
+        # Make sure either HY scale is in the range 0 <= y <= 5
+        var_range_check = df[(df[get_varname] >= 5) | (df[get_varname] <= 0)]
+        if var_range_check.shape[0] > 0:
+            st.error(f'Please keep the {get_varname} value greater than or equal to 0 and less than or equal to 5.')
+            st.markdown(f'_Out-of-range {get_varname} Values:_')
+            st.dataframe(var_range_check)
+            st.stop()
+
         st.markdown('---------')
 
         st.markdown('### Visualize Dataset')
@@ -236,11 +252,21 @@ if data_file is not None and study_name is not None:
         
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
-        strat_val = {'Study Arm': 'study_arm', 'GP2 Phenotype': 'GP2_phenotype'}
+        strat_val = {'Study Arm': 'study_arm', 'GP2 Phenotype': 'GP2_phenotype', 'Clinical State on Medication': 'clinical_state_on_medication'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(), index = 0, label_visibility = 'collapsed')
         selected_strata = strat_val[strata]
-        btn2 = plot2.button('Continue', key = 'continue_plot', on_click = plot_callback1)
 
+        # Make sure medication status includes required values to continue
+        if selected_strata == 'clinical_state_on_medication':
+            med_vals = ['ON', 'OFF', 'Unknown'] # double-check if case matters
+            wrong_med_vals = df_final[~df_final[selected_strata].isin(med_vals)]
+            if wrong_med_vals.shape[0] > 0:
+                st.error(f'Please make sure {selected_strata} values are {med_vals} to continue.')
+                st.markdown(f'_Fix the Following {selected_strata} Values:_')
+                st.dataframe(wrong_med_vals)
+                st.stop()
+
+        btn2 = plot2.button('Continue', key = 'continue_plot', on_click = plot_callback1)
         if st.session_state['plot_val']:
             plot_interactive_visit_month(df_final, get_varname, selected_strata)
 
