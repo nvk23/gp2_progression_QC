@@ -30,7 +30,7 @@ study_name = get_studycode(master_path)  # initializes study_name to None
 required_cols = ['clinical_id', 'visit_month']
 # optional_cols =  ['clinical_state_on_medication', 'hoehn_and_yahr_stage']
 optional_cols = {'clinical_state_on_medication': 'Unknown',
-                 'hoehn_and_yahr_stage': 'null'}
+                 'hoehn_and_yahr_stage': None}
 outcomes = ['Original HY Scale', 'Modified HY Scale']
 # add Modified here when figure out template col name
 outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage'}
