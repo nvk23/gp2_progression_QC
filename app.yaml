@@ -1,4 +1,4 @@
-service: gp2-sample-manifest
+service: gp2-clinical-qc
 runtime: custom
 env: flex
 resources:

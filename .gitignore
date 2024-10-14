@@ -1,7 +1,8 @@
-__pycache__/
+__pycache__/*
 *.py[cod]
 *$py.class
 
 data/*
 .DS_Store
-secrets/
+secrets/*
+.streamlit/*

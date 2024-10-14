@@ -13,4 +13,4 @@ COPY . /app
 WORKDIR /app
 
 # Using entrypoiny as we are using the container as en exec
-ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "run", "Home.py", "--server.port=8080", "--server.address=0.0.0.0"]

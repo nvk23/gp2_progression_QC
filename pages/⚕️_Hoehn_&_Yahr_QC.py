@@ -1,37 +1,42 @@
-from plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
-from qcutils import checkNull, subsetData, checkDup, create_survival_df
-from writeread import read_file, get_studycode, send_email, upload_data
-from app_setup import config_page
 import os
 import sys
 import subprocess
+import datetime as dt
 import numpy as np
 import pandas as pd
 import streamlit as st
 from functools import reduce
 
+from plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from qcutils import checkNull, subsetData, checkDup, create_survival_df
+from writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
+from app_setup import config_page
+
 sys.path.append('utils')
 
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = ''
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets_R7.json" # FOR TESTING ONLY
 bucket_name = ''
 bucket_destination = ''
 
 config_page('Hoehn & Yahr QC')
 
-# Necessary paths - Update Template
-# template_link = 'https://docs.google.com/spreadsheets/d/1tTkVcfP8l37uN09vGMNWiPQKBESRQGCrTZLdvR7rVQw/edit?usp=sharing' # old link
+# Necessary paths
 template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
 data_file = st.sidebar.file_uploader(
     "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
-master_path = 'data/master_key.csv'
-study_name = get_studycode(master_path)  # initializes study_name to None
-# cols = ['clinical_id', 'visit_month', 'clinical_state_on_medication', 'hoehn_and_yahr_stage']
+
+# local master key access - replace with file in bucket
+if 'master_key' not in st.session_state:
+    st.session_state.master_key = get_master()
+study_name = get_studycode()
+
 required_cols = ['clinical_id', 'visit_month']
-# optional_cols =  ['clinical_state_on_medication', 'hoehn_and_yahr_stage']
 optional_cols = {'clinical_state_on_medication': 'Unknown',
                  'hoehn_and_yahr_stage': None}
 outcomes = ['Original HY Scale', 'Modified HY Scale']
+
 # add Modified here when figure out template col name
 outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage'}
 
@@ -57,8 +62,10 @@ if 'add_nulls' not in st.session_state:
 def callback1():
     st.session_state['btn'] = True
 
+
 def null_callback1():
     st.session_state['add_nulls'] = True
+
 
 def plot_callback1():
     st.session_state['plot_val'] = True
@@ -84,8 +91,8 @@ with instructions:
     st.markdown(
         f'__①__ Please download [the data dictionary and template]({template_link}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
     st.markdown(
-        '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar.')
-    # add feature that suggests study code name if file name found in master key - correct if wrong
+        '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
+    # Optional: add feature that suggests study code name if file name found in master key - correct if wrong
     st.markdown('__③__ Select your GP2 Study Code.')
 st.markdown('---------')
 
@@ -95,8 +102,8 @@ if data_file is not None and study_name is not None:
     df = read_file(data_file)
 
     # Load GP2 Genotyping Data Master Key
-    dfg = pd.read_csv(master_path, low_memory=False)
-    dfg = dfg.drop_duplicates(subset='GP2ID', keep='first')
+    dfg = st.session_state.master_key.drop_duplicates(
+        subset='GP2ID', keep='first')
     dfg = dfg[dfg.study == study_name].copy()
     df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype',
                   'study_arm', 'study_type']], on='clinical_id', how='left')
@@ -136,7 +143,8 @@ if data_file is not None and study_name is not None:
     if len(missing_optional) > 0:
         init_cols1.warning(f'Warning: The following optional columns are missing: {missing_optional}. \
                 Please use the template sheet if you would like to add these values or initialize with null values.')
-        add_nulls = init_cols2.button('Fill Columns with Null Values', on_click=null_callback1())
+        add_nulls = init_cols2.button(
+            'Fill Columns with Null Values', on_click=null_callback1())
         if st.session_state['add_nulls']:
             for col in missing_optional:
                 df[col] = optional_cols[col]
@@ -234,26 +242,6 @@ if data_file is not None and study_name is not None:
                                                     on=['clinical_id',
                                                         'visit_month'],
                                                     how='outer'), st.session_state['data_chunks'])
-
-            # Move to the end if add final download button - remove aggrid dataframe
-            # st.session_state['clinqc'] = final_df
-
-            # aggridPlotter(final_df)
-            # # df_builder = GridOptionsBuilder.from_dataframe(final_df)
-            # # df_builder.configure_grid_options(alwaysShowHorizontalScroll = True,
-            # #                                     enableRangeSelection=True,
-            # #                                     pagination=True,
-            # #                                     paginationPageSize=10000,
-            # #                                     domLayout='normal')
-            # # godf = df_builder.build()
-            # # AgGrid(final_df,gridOptions=godf, theme='streamlit', height=300)
-
-            # writeexcel = to_excel(final_df, st.session_state['keepcode'], datatype = 'clinical')
-            # st.download_button(label='📥 Download your QC clinical data',
-            #                     data = writeexcel[0],
-            #                     file_name = writeexcel[1],)
-
-            # st.stop()
 
     if st.session_state['btn']:
         # if st.button("Continue", on_click=callback1):
@@ -364,6 +352,8 @@ if data_file is not None and study_name is not None:
             qc_yesno = st.selectbox("Does the variable QC look correct?",
                                     ["YES", "NO"],
                                     index=None)
+
+            # NEED TO CLARIFY: DO WE WANT DF FINAL OR DF TO BE SENT/SAVED?
             if qc_yesno == 'YES':
                 st.info('Thank you! Please review the following options:')
                 st.session_state['data_chunks'].append(df_final)
@@ -377,65 +367,78 @@ if data_file is not None and study_name is not None:
 
                 yes_col2.button("Email Data to GP2 Clinical Data Coordinator",
                                 use_container_width=True, on_click=email_callback1)
+
                 # necessary because of nested form/button
                 if st.session_state['send_email']:
-                    # need bytes-like object to send email, not dataframe
-                    tmp_path = f'data/tmp/{study_name}_final_qc.csv'
-                    # no way to get path from file upload
-                    df_final.to_csv(tmp_path, index=False)
 
                     email_form = st.empty()
-                    # add form
-                    with email_form.form("email_gp2"):
+                    with email_form.container(border=True):
                         st.write("#### :red[Send the following email?]")
-                        # double check this title
+
                         st.markdown(
                             "__TO:__ Lietsel Jones (Member of GP2's Cohort Integration Working Group)")
 
-                        # can add "change message" option
+                        version = dt.datetime.today().strftime('%Y-%m-%d')
                         st.markdown(
-                            f"__MESSAGE:__ Hi Lietsel, \nThe {study_name} team has finished QCing their clinical data. See attachment.")
-
-                        # can add "change file name" option
-                        st.markdown(
-                            f'__ATTACHMENT:__ {study_name}_clinical_qc.csv')
+                            f'__ATTACHMENT:__ {version}_{study_name}_clinical_qc.csv')
                         st.dataframe(df_final)
+                        st.markdown(
+                        "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")
+
+                        st.markdown(f"__SUBMITTER CONTACT INFO:__ ")
+                        submit1, submit2 = st.columns(2)
+                        submitter_name = submit1.text_input(
+                            label='Please provide your name:')
+                        submitter_email = submit2.text_input(
+                            label='Please provide your email:')  # verify if email format
 
                         send1, send2, send3 = st.columns(3)
-                        submitted = send2.form_submit_button(
-                            "Send", use_container_width=True)
+                        if submitter_name and submitter_email:
+                            submitted = send2.button(
+                                "Send", use_container_width=True)
+                        else:
+                            submitted = send2.button(
+                                "Send", use_container_width=True, disabled=True)
                     if submitted:
-                        send_email(study_name, 'send_data', tmp_path)
+                        st.session_state.send_email = False
+                        send_email(study_name, 'send_data', contact_info={
+                            'name': submitter_name, 'email': submitter_email}, data=df_final)
                         email_form.empty()  # clear form from screen
                         st.success('Email sent, thank you!')
 
-                yes_col3.button("Submit Data to GP2's Google Bucket",
-                                use_container_width=True, on_click=upload_callback1)
-                if st.session_state['upload_bucket']:
-                    upload_form = st.empty()
+                excel_file, filename = to_excel(df=df_final,
+                                                studycode=study_name)
+                yes_col3.download_button("Download your Data", data=excel_file, file_name=filename,
+                                         mime="application/vnd.ms-excel", use_container_width=True)
 
-                    # add form
-                    with upload_form.form("upload_gp2"):
-                        st.write("#### :red[Upload the following data?]")
+                # Currently moving forward with email-only submission
+                # yes_col3.button("Submit Data to GP2's Google Bucket",
+                #                 use_container_width=True, on_click=upload_callback1)
+                # if st.session_state['upload_bucket']:
+                #     upload_form = st.empty()
 
-                        st.markdown(f"__GOOGLE CLOUD PROJECT NAME:__ ")
-                        st.markdown("__BUCKET DESTINATION:__ ")
+                #     # add form
+                #     with upload_form.form("upload_gp2"):
+                #         st.write("#### :red[Upload the following data?]")
 
-                        # can add "change file name" option
-                        st.markdown(f'__FILE:__ {study_name}_clinical_qc.csv')
-                        st.dataframe(df_final)
+                #         st.markdown(f"__GOOGLE CLOUD PROJECT NAME:__ ")
+                #         st.markdown("__BUCKET DESTINATION:__ ")
 
-                        send1, send2, send3 = st.columns(3)
-                        submitted = send2.form_submit_button(
-                            "Upload", use_container_width=True)
-                        if submitted:
-                            # currently do not have Google Bucket info
-                            upload_data(bucket_name, df_final,
-                                        bucket_destination)
-                            upload_form.empty()  # clear form from screen
-                            st.success('Data uploaded, thank you!')
+                #         # can add "change file name" option
+                #         st.markdown(f'__FILE:__ {study_name}_clinical_qc.csv')
+                #         st.dataframe(df_final)
+
+                #         send1, send2, send3 = st.columns(3)
+                #         submitted = send2.form_submit_button(
+                #             "Upload", use_container_width=True)
+                #         if submitted:
+                #             # currently do not have Google Bucket info
+                #             upload_data(bucket_name, df_final,
+                #                         bucket_destination)
+                #             upload_form.empty()  # clear form from screen
+                #             st.success('Data uploaded, thank you!')
 
             if qc_yesno == 'NO':
                 st.error("Please change any unexpected values in your clinical data and reupload \
-                         or get in touch with GP2's Cohort Integration Working Group (cohort@gp2.org) if needed.")
+                         or get in touch with GP2's Cohort Integration Working Group if needed.")
                 st.stop()
