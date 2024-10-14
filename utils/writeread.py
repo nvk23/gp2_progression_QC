@@ -111,8 +111,7 @@ def to_excel(df, studycode):
 def send_email(studycode, activity, contact_info, data=None):
     if activity == 'send_data':
         subject = f'{studycode} has Attached QCed Clinical Data'
-        body = f'Hey team,\n\n{contact_info["name"]} has finished QCing their {studycode} Clinical Data for our Progression Project.\
-              You can contact them at {contact_info["email"]}. See attachment below.'
+        body = f'Hey team,\n\n{contact_info["name"]} has finished QCing their {studycode} Clinical Data for our Progression Project. You can contact them at {contact_info["email"]}. See attachment below.'
     elif activity == 'upload':
         subject = f'{studycode} has uploaded Clinical Data to the bucket'
         body = f"Hey team, \n{studycode} has uploaded their QC'ed clinical data to the bucket."
