@@ -15,7 +15,7 @@ from app_setup import config_page
 sys.path.append('utils')
 
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets_R8.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets.json"
 
 # Moving forward with email only for now
 # bucket_name = ''
