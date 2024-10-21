@@ -8,7 +8,7 @@ def checkNull(df, voi):
     to observe null values within context
     """
     nulls = df[df.loc[:,voi].isnull()]
-    n_null = len(nulls)
+    # n_null = len(nulls)
   
     # if n_null==0:
     #     st.write(f'{len(df)} entries: No null values')

@@ -21,6 +21,7 @@ def studycode_callback():
 
 
 def get_master():
+    # Can improve speed by adding Master Key to bucket
     with open(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]) as f:
         scopes = ['https://www.googleapis.com/auth/drive']
 
@@ -56,13 +57,12 @@ def get_studycode():
     if 'study_name' not in st.session_state:
         # Create study code options for dropdown
         study_codes = st.session_state.master_key.study.str.strip().dropna().unique().tolist()
-        # study_codes.append('TEST') # FOR TESTING ONLY
         study_codes = sorted(study_codes, key=str.lower)
         st.session_state['study_name'] = study_codes # sort out if session state variable is necessary
 
     study_name = st.sidebar.selectbox(
         'Select your GP2 study code',
-        st.session_state['studycodes'],
+        st.session_state['study_name'],
         key='mycode',
         index=None,
         on_change=studycode_callback)
