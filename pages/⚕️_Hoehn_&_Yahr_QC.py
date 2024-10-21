@@ -16,6 +16,7 @@ sys.path.append('utils')
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets.json"
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets_R8.json" # FOR TESTING ONLY
 
 # Moving forward with email only for now
 # bucket_name = ''
@@ -310,7 +311,8 @@ if data_file is not None and study_name is not None:
     # Check that clinical variables have correct values if they're in the data
     optional_vars = [col for col in list(
         optional_cols.keys()) if col in df.columns]
-    optional_vars.remove('ledd_daily')
+    if 'ledd_daily' in optional_vars:
+        optional_vars.remove('ledd_daily')
     for col in optional_vars:
         wrong_med_vals = df[(~df[col].isin(med_vals[col]))
                             & (df[col].notnull())]
