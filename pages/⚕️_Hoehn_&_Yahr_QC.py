@@ -299,7 +299,7 @@ if data_file is not None and study_name is not None:
                 st.markdown(f'_Ages below 25 in column {col}:_')
                 st.dataframe(df[df[col] < 25], use_container_width=True)
         if df[df[col] == 0].shape[0] > 0:
-            age_warn1.error(
+            st.error(
                 f'We have detected ages of 0 in the {col} column. Please correct this and re-upload.')
             st.markdown(f'_{col} entries with age 0:_')
             st.dataframe(df[df[col] == 0], use_container_width=True)
