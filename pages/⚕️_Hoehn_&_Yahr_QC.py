@@ -169,7 +169,7 @@ if data_file is not None and study_name is not None:
             __Would you like to continue with your uploaded values or the manifest values?__')
         unequal_cols.insert(0, 'clinical_id')
         unequal_cols.insert(1, 'GP2ID')
-        st.dataframe(df[unequal_cols], use_container_width=True)
+        st.dataframe(df[unequal_cols], use_container_width=True) # should we display all unequal values first?
         uploaded1, uploaded2, uploaded3 = st.columns(3)
         continue_merge = uploaded2.selectbox('Continue with:', options=[
                                              '', 'Uploaded Values', 'Manifest Values'], index=0)
@@ -285,7 +285,7 @@ if data_file is not None and study_name is not None:
         if df[df[col] < 0].shape[0] > 0:
             st.error(
                 f'We have detected negative values in the {col} column. This is likely to be a mistake in the data.')
-            st.markdown(f'_Negative Values in column {col}:_')
+            st.markdown(f'_Negative values in column {col}:_')
             st.dataframe(df[df[col] < 0], use_container_width=True)
             st.stop()
 
@@ -296,8 +296,24 @@ if data_file is not None and study_name is not None:
             age_warn1.warning(
                 f'Warning: We have detected ages that are below 25 in the {col} column. Please check that this is correct.')
             if age_warn2.button('View Ages Below 25'):
-                st.markdown(f'_Ages Below 25 in column {col}:_')
+                st.markdown(f'_Ages below 25 in column {col}:_')
                 st.dataframe(df[df[col] < 25], use_container_width=True)
+        if df[df[col] == 0].shape[0] > 0:
+            age_warn1.error(
+                f'We have detected ages of 0 in the {col} column. Please correct this and re-upload.')
+            st.markdown(f'_{col} entries with age 0:_')
+            st.dataframe(df[df[col] == 0], use_container_width=True)
+            st.stop()
+
+    # Make sure age_at_baseline is consistent for the same clinical IDs
+    inconsistent_ids = df.groupby('clinical_id')['age_at_baseline'].nunique()
+    inconsistent_ids = inconsistent_ids[inconsistent_ids > 1].index.tolist()
+    if len(inconsistent_ids):
+        st.error(
+                f'We have detected samples with inconsistent age_at_baseline values. Please correct this and re-upload.')
+        st.markdown(f'_Samples with inconsistent age_at_baseline values:_')
+        st.dataframe(df[df.clinical_id.isin(inconsistent_ids)])
+        st.stop()
 
     # Make sure LEDD dosage falls in specific range if column exists
     if 'ledd_daily' in df.columns:
@@ -305,7 +321,7 @@ if data_file is not None and study_name is not None:
         if check_ledd.shape[0] > 0:
             st.warning(
                 f'Warning: Pleaes keep Levadopa Equivalent Dosage values per day greater than or equal to 0 and less than or equal to 10,000.')
-            st.markdown(f'_Daily LEDD Values out of this Range:_')
+            st.markdown(f'_Daily LEDD Values out of this range:_')
             st.dataframe(check_ledd, use_container_width=True)
 
     # Check that clinical variables have correct values if they're in the data
@@ -499,7 +515,7 @@ if data_file is not None and study_name is not None:
 
                         version = dt.datetime.today().strftime('%Y-%m-%d')
                         st.markdown(
-                            f'__ATTACHMENT:__ {version}_{study_name}_clinical_qc.csv')
+                            f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
                         st.dataframe(df, use_container_width=True)
                         st.markdown(
                             "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")
@@ -521,7 +537,7 @@ if data_file is not None and study_name is not None:
                     if submitted:
                         st.session_state.send_email = False
                         send_email(study_name, 'send_data', contact_info={
-                            'name': submitter_name, 'email': submitter_email}, data=df)
+                            'name': submitter_name, 'email': submitter_email}, data=df, modality='HY')
                         email_form.empty()  # clear form from screen
                         st.success('Email sent, thank you!')
 
@@ -544,7 +560,7 @@ if data_file is not None and study_name is not None:
                 #         st.markdown("__BUCKET DESTINATION:__ ")
 
                 #         # can add "change file name" option
-                #         st.markdown(f'__FILE:__ {study_name}_clinical_qc.csv')
+                #         st.markdown(f'__FILE:__ {study_name}_HY_qc.csv')
                 #         st.dataframe(df, use_container_width=True)
 
                 #         send1, send2, send3 = st.columns(3)

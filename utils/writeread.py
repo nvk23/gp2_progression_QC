@@ -92,7 +92,7 @@ def to_excel(df, studycode):
     version = dt.datetime.today().strftime('%Y-%m-%d')
     ext = "xlsx"
 
-    filename = f"{version}_{studycode}_clinical_qc.{ext}"
+    filename = f"{version}_{studycode}_HY_qc.{ext}"
 
     output = io.BytesIO()
 
@@ -108,19 +108,18 @@ def to_excel(df, studycode):
 # can auto add date/time to file name
 
 
-def send_email(studycode, activity, contact_info, data=None):
+def send_email(studycode, activity, contact_info, data=None, modality='Clinical'):
     if activity == 'send_data':
-        subject = f'{studycode} has Attached QCed Clinical Data'
-        body = f'Hey team,\n\n{contact_info["name"]} has finished QCing their {studycode} Clinical Data for our Progression Project. You can contact them at {contact_info["email"]}. See attachment below.'
+        subject = f'{studycode} has Attached QCed {modality} Data'
+        body = f'Hey team,\n\n{contact_info["name"]} has finished QCing their {studycode} {modality} Data for our Progression Project. You can contact them at {contact_info["email"]}. See attachment below.'
     elif activity == 'upload':
-        subject = f'{studycode} has uploaded Clinical Data to the bucket'
-        body = f"Hey team, \n{studycode} has uploaded their QC'ed clinical data to the bucket."
+        subject = f'{studycode} has uploaded {modality} Data to the bucket'
+        body = f"Hey team,\n\n{studycode} has uploaded their QC'ed {modality} data to the bucket."
 
     with open(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]) as f:
         get_json = json.load(f)
         sender = get_json['email_data']['secrets']['sender']
         receiver = get_json['email_data']['secrets']['receiver']
-        # may need to create Google app password
         pwd = get_json['email_data']['secrets']['pwd']
 
     msg = MIMEMultipart()
@@ -144,7 +143,7 @@ def send_email(studycode, activity, contact_info, data=None):
 
         version = dt.datetime.today().strftime('%Y-%m-%d')
         part.add_header('Content-Disposition',
-                        f'attachment; filename={version}_{studycode}_clinical_qc.csv')
+                        f'attachment; filename={version}_{studycode}_HY_qc.csv')
         msg.attach(part)
 
     server = smtplib.SMTP('smtp.gmail.com', 587)
