@@ -122,14 +122,58 @@ if data_file is not None and study_name is not None:
     df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'age_at_baseline', 'age_of_onset',
                            'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
 
-    # Check counts and GP2IDs
+    # Will print total count metrics at the top of the page
     count1, count2, count3 = st.columns(3)
+
+    # Identify columns from manifest
+    manifest_cols = [col for col in df.columns if col.endswith('_manifest')]
+
+    # Identify equivalent columns from uploaded file
+    uploaded_cols = [col.replace('_manifest', '_uploaded')
+                     for col in manifest_cols]
+
+    # Compare the corresponding columns
+    unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (
+        df[x] == df[y]).all() for col in (x, y)]
+
+    # Need to fix any discrepancies between manifest and uploaded file before continuing
+    if len(unequal_cols) > 0:
+        st.error(
+            f'Discrepancies were found between overlapping columns in the GP2 Manifest and your uploaded file in the following columns: {unequal_cols}. \
+            __Would you like to continue with your uploaded values or the manifest values?__')
+
+        if 'clinical_id_manifest' not in unequal_cols:
+            unequal_cols.insert(0, 'clinical_id')
+        if 'GP2ID_manifest' not in unequal_cols:
+            unequal_cols.insert(1, 'GP2ID')
+
+        st.dataframe(df[unequal_cols], use_container_width=True) # should we display all unequal values first?
+        uploaded1, uploaded2, uploaded3 = st.columns(3)
+        continue_merge = uploaded2.selectbox('Continue with:', options=[
+                                             '', 'Uploaded Values', 'Manifest Values'], index=0)
+
+        if continue_merge == 'Uploaded Values':
+            rename_uploaded = [col.split('_uploaded')[0]
+                               for col in uploaded_cols]
+            rename_cols = dict(zip(uploaded_cols, rename_uploaded))
+            df.rename(columns=rename_cols, inplace=True)
+            df.drop(columns=manifest_cols, inplace=True)
+        elif continue_merge == 'Manifest Values':
+            rename_manifest = [col.split('_manifest')[0]
+                               for col in manifest_cols]
+            rename_cols = dict(zip(manifest_cols, rename_manifest))
+            df.rename(columns=rename_cols, inplace=True)
+            df.drop(columns=uploaded_cols, inplace=True)
+        else:
+            st.stop()
+
+    # Check counts and GP2IDs
     n = len(df.clinical_id.unique())
 
     id_not_in_GP2 = df[df.GP2ID.isnull()]['clinical_id'].unique()
     if len(id_not_in_GP2) == n:
         st.error(
-            f'None of the clinical IDs are in the GP2. Please check that your clinical IDs and selected GP2 Study Code ({study_name}) are correct.')
+            f'None of the clinical IDs are in GP2. Please check that your clinical IDs and selected GP2 Study Code ({study_name}) are correct.')
         st.stop()
     elif len(id_not_in_GP2) > 0:
         st.warning(
@@ -150,44 +194,6 @@ if data_file is not None and study_name is not None:
         count1.metric(label="Unique Clinical IDs", value=n)
         count2.metric(label="GP2 IDs Found", value=n)
         count3.metric(label="Total Observations", value=len(df))
-
-    # Identify columns from manifest
-    manifest_cols = [col for col in df.columns if col.endswith('_manifest')]
-
-    # Identify equivalent columns from uploaded file
-    uploaded_cols = [col.replace('_manifest', '_uploaded')
-                     for col in manifest_cols]
-
-    # Compare the corresponding columns
-    unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (
-        df[x] == df[y]).all() for col in (x, y)]
-
-    # Need to fix any discrepancies between manifest and uploaded file before continuing
-    if len(unequal_cols) > 0:
-        st.error(
-            f'Discrepancies were found between overlapping columns in the GP2 Manifest and your uploaded file in the following columns: {unequal_cols}. \
-            __Would you like to continue with your uploaded values or the manifest values?__')
-        unequal_cols.insert(0, 'clinical_id')
-        unequal_cols.insert(1, 'GP2ID')
-        st.dataframe(df[unequal_cols], use_container_width=True) # should we display all unequal values first?
-        uploaded1, uploaded2, uploaded3 = st.columns(3)
-        continue_merge = uploaded2.selectbox('Continue with:', options=[
-                                             '', 'Uploaded Values', 'Manifest Values'], index=0)
-
-        if continue_merge == 'Uploaded Values':
-            rename_uploaded = [col.split('_uploaded')[0]
-                               for col in uploaded_cols]
-            rename_cols = dict(zip(uploaded_cols, rename_uploaded))
-            df.rename(columns=rename_cols, inplace=True)
-            df.drop(columns=manifest_cols, inplace=True)
-        elif continue_merge == 'Manifest Values':
-            rename_manifest = [col.split('_manifest')[0]
-                               for col in manifest_cols]
-            rename_cols = dict(zip(manifest_cols, rename_manifest))
-            df.rename(columns=rename_cols, inplace=True)
-            df.drop(columns=uploaded_cols, inplace=True)
-        else:
-            st.stop()
 
     # Create column that combines values from age of diagnosis first then age of onset
     df['age_outcome'] = df['age_at_diagnosis'].combine_first(
