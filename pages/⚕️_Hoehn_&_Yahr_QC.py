@@ -7,12 +7,10 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
-from qcutils import checkNull, subsetData, checkDup, create_survival_df
-from writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
-from app_setup import config_page
-
-sys.path.append('utils')
+from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.qcutils import checkNull, subsetData, checkDup, create_survival_df
+from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
+from utils.app_setup import config_page
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets.json"
@@ -313,13 +311,23 @@ if data_file is not None and study_name is not None:
             st.stop()
 
     # Make sure age_at_baseline is consistent for the same clinical IDs
-    inconsistent_ids = df.groupby('clinical_id')['age_at_baseline'].nunique()
-    inconsistent_ids = inconsistent_ids[inconsistent_ids > 1].index.tolist()
-    if len(inconsistent_ids):
+    inconsistent_baseline = df.groupby('clinical_id')['age_at_baseline'].nunique()
+    inconsistent_baseline = inconsistent_baseline[inconsistent_baseline > 1].index.tolist()
+
+    inconsistent_outcome = df.groupby('clinical_id')['age_outcome'].nunique()
+    inconsistent_outcome = inconsistent_outcome[inconsistent_outcome > 1].index.tolist()
+
+    if len(inconsistent_baseline) > 0:
         st.error(
                 f'We have detected samples with inconsistent age_at_baseline values. Please correct this and re-upload.')
         st.markdown(f'_Samples with inconsistent age_at_baseline values:_')
-        st.dataframe(df[df.clinical_id.isin(inconsistent_ids)])
+        st.dataframe(df[df.clinical_id.isin(inconsistent_baseline)])
+        st.stop()
+    elif len(inconsistent_outcome) > 0:
+        st.error(
+                f'We have detected samples with inconsistent age_at_diagnosis or age_of_onset values. Please correct this and re-upload.')
+        st.markdown(f'_Samples with inconsistent age_at_diagnosis or age_of_onset values:_')
+        st.dataframe(df[df.clinical_id.isin(inconsistent_outcome)])
         st.stop()
 
     # Make sure LEDD dosage falls in specific range if column exists
