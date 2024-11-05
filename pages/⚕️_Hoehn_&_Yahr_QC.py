@@ -300,7 +300,7 @@ if data_file is not None and study_name is not None:
             age_warn1, age_warn2 = st.columns([2, 0.5])
             age_warn1.warning(
                 f'Warning: We have detected ages that are below 25 in the {col} column. Please check that this is correct.')
-            if age_warn2.button('View Ages Below 25'):
+            if age_warn2.button('View Ages Below 25', key=f'below_25_{col}'):
                 st.markdown(f'_Ages below 25 in column {col}:_')
                 st.dataframe(df[df[col] < 25], use_container_width=True)
         if df[df[col] == 0].shape[0] > 0:
