@@ -171,12 +171,13 @@ if data_file is not None and study_name is not None:
     n = len(df.clinical_id.unique())
 
     id_not_in_GP2 = df[df.GP2ID.isnull()]['clinical_id'].unique()
+    checkids1, checkids2 = st.columns([2, 0.5])
     if len(id_not_in_GP2) == n:
         st.error(
             f'None of the clinical IDs are in GP2. Please check that your clinical IDs and selected GP2 Study Code ({study_name}) are correct.')
         st.stop()
     elif len(id_not_in_GP2) > 0:
-        st.warning(
+        checkids1.warning(
             f'Warning: Some clinical IDs are not in the GP2 so the dataset. Dataset review will continue only with GP2 IDs.')
         df = df[df.GP2ID.notnull()].copy()
         n = len(df.clinical_id.unique())
@@ -185,7 +186,7 @@ if data_file is not None and study_name is not None:
                       value=len(id_not_in_GP2))
         count3.metric(label="Total Observations for GP2 IDs", value=len(df))
 
-        view_missing_ids = st.button('Review IDs not Found in GP2')
+        view_missing_ids = checkids2.button('Review IDs not Found in GP2')
         if view_missing_ids:
             st.markdown('_Non-GP2 Clinical IDs:_')
             st.dataframe(id_not_in_GP2, use_container_width=True)
