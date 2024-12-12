@@ -45,6 +45,22 @@ with overview:
                 shown in the following table:')
     st.image(
         'data/original_vs_modified_HY.png')
+    
+instructions = exp2.expander("Instructional Video", expanded=False)
+with instructions:
+    st.markdown('''
+        <style>
+        [data-testid="stMarkdownContainer"] ul{
+            padding-left:40px;
+        }
+        </style>
+        ''', unsafe_allow_html=True)
+    
+    st.markdown("_Click to expand to full-screen in the bottom right corner:_")
+    instruct_video = open('data/GP2_HY_app_tutorial.mov', 'rb')
+    video_bytes = instruct_video.read()
+    st.video(video_bytes)
+
 
 # Customize text in Expander element
 hvar = """ <script>
