@@ -27,7 +27,7 @@ template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1d
 data_file = st.sidebar.file_uploader(
     "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
 
-# Local master key access - replace with file in bucket
+# Google Drive Master Key access
 if 'master_key' not in st.session_state:
     st.session_state.master_key = get_master()
 study_name = get_studycode()
@@ -35,12 +35,12 @@ study_name = get_studycode()
 # Establish necessary columns
 required_cols = ['clinical_id', 'visit_month',
                  'age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
-# alert about any missing values
+# Alert about any missing values
 required_cols_check = ['clinical_id',
                        'visit_month', 'age_at_baseline', 'age_outcome']
 age_cols = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
 
-# can default all cols to None and delete dictionary if we prefer
+# Can default all cols to None and delete dictionary if we prefer
 optional_cols = {'clinical_state_on_medication': None,
                  'ledd_daily': None, 'medication_for_pd': None,  'dbs_status': None, }
 med_vals = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
@@ -49,7 +49,7 @@ med_vals = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
 outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage',
                  'Modified HY Scale': 'modified_hoehn_and_yahr_stage'}
 
-# Necessary session state initializiation/methods - can move to app_setup
+# Necessary session state initializiation/methods - can move to app_setup.py
 if 'data_chunks' not in st.session_state:
     st.session_state['data_chunks'] = []
 if 'btn' not in st.session_state:
@@ -65,9 +65,7 @@ if 'add_nulls' not in st.session_state:
 if 'variable' not in st.session_state:
     st.session_state['variable'] = list(outcomes_dict.keys())
 
-# can move to app_setup
-
-
+# can move methods to app_setup.py
 def callback1():
     st.session_state['btn'] = True
 
@@ -92,7 +90,7 @@ def callback2():
     st.session_state['btn'] = False
 
 
-# App set-up
+# Page set-up
 st.markdown('## Hoehn and Yahr QC')
 
 instructions = st.expander("##### :red[Getting Started]", expanded=True)
@@ -101,21 +99,35 @@ with instructions:
         f'__①__ Please download [the data dictionary and template]({template_link}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
     st.markdown(
         '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
-    # Optional: add feature that suggests study code name if file name found in master key - correct if wrong
+    # Optional: add feature that suggests study code name if file name found in master key - correct user submission if wrong
     st.markdown('__③__ Select your GP2 Study Code.')
 st.markdown('---------')
 
-
+# When required user inputs are given
 if data_file is not None and study_name is not None:
     st.markdown('### Your Data Overview')
     df = read_file(data_file)
+
+    # Make sure uploaded dataframe matches exact names to prep for merge
+    incorrect_req = np.setdiff1d(required_cols, df.columns)
+    incorrect_optional = np.setdiff1d(list(optional_cols.keys()), df.columns)
+
+    # Only alert user about values in their uploaded data
+    req_df = [col for col in incorrect_req if col in df.columns]
+    opt_df = [col for col in incorrect_optional if col in df.columns]
+
+    if len(opt_df) > 0:
+        st.warning(f"Please correct the column(s) __{', '.join(opt_df)}__ in your uploaded data to match the following optional template columns: {', '.join(list(optional_cols.keys()))}.")
+    if len(req_df) > 0:
+        st.error(f"Please correct the column(s) __{', '.join(req_df)}__ in your uploaded data to match the following required template options: {', '.join(required_cols)}.")
+        st.stop()
 
     # Load GP2 Genotyping Data Master Key
     dfg = st.session_state.master_key.drop_duplicates(
         subset='GP2ID', keep='first')
     dfg = dfg[dfg.study == study_name].copy()
 
-    # make sure this is consistent among all manifest versions
+    # Make sure this is consistent among all manifest versions
     dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)
     df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'age_at_baseline', 'age_of_onset',
                            'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
@@ -130,9 +142,9 @@ if data_file is not None and study_name is not None:
     uploaded_cols = [col.replace('_manifest', '_uploaded')
                      for col in manifest_cols]
 
-    # Compare the corresponding columns
-    unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (
-        df[x] == df[y]).all() for col in (x, y)]
+    # Compare the corresponding columns and only flag for > 1 age difference
+    unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (abs(
+    df[x] - df[y]) <= 1).all() for col in (x, y)]
 
     # Need to fix any discrepancies between manifest and uploaded file before continuing
     if len(unequal_cols) > 0:
@@ -164,6 +176,13 @@ if data_file is not None and study_name is not None:
             df.drop(columns=uploaded_cols, inplace=True)
         else:
             st.stop()
+    else:
+
+        # Continue with uploaded data columns
+        original_cols = [col.replace('_uploaded', '') for col in uploaded_cols]
+        rename_cols = dict(zip(uploaded_cols, original_cols))
+        df.drop(columns = manifest_cols, inplace = True)
+        df.rename(columns = dict(zip(uploaded_cols, original_cols)), inplace = True)
 
     # Check counts and GP2IDs
     n = len(df.clinical_id.unique())

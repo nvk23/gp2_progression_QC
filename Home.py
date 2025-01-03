@@ -26,6 +26,7 @@ exp1, exp2, exp3 = st.columns([1, 2, 1])  # holds expander for full description
 
 sent2.markdown("<h5 style='text-align: center; '>Visualize and review your data prior to GP2 submission for downstream analyses.</h5>", unsafe_allow_html=True)
 sent2.markdown("<h5 style='text-align: center; '>Please select a page marked with ⚕️ in the sidebar to begin.</h5>", unsafe_allow_html=True)
+sent2.markdown("<h6 style='text-align: center; '>If an image or video does not load in the tabs below, please refresh the page.</h6>", unsafe_allow_html=True)
 
 # Display expander with full project description
 overview = exp2.expander("Available Metrics", expanded=False)
