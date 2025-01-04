@@ -8,7 +8,7 @@ import streamlit as st
 from functools import reduce
 
 from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
-from utils.qcutils import checkNull, subsetData, checkDup, create_survival_df
+from utils.qcutils import checkNull, subsetData, checkDup, check_chronological_order, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
 from utils.app_setup import config_page
 
@@ -129,7 +129,7 @@ if data_file is not None and study_name is not None:
 
     # Make sure this is consistent among all manifest versions
     dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)
-    df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'age_at_baseline', 'age_of_onset',
+    df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'diagnosis', 'age_at_baseline', 'age_of_onset',
                            'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
 
     # Will print total count metrics at the top of the page
@@ -258,12 +258,11 @@ if data_file is not None and study_name is not None:
     if sum(missing_sums.values()) > 0:
         st.error(
             f'There are missing entries in the required columns {required_cols}. Please fill in the missing cells.\
-            __Reminder that age_of_onset is only required if age_at_diagnosis is unavailable and vice versa.__')
-        st.markdown('_Missing Values (displayed first):_')
+            __Reminder that age_of_onset is only required if age_at_diagnosis is unavailable.__')
+        st.markdown('_Missing Required Values:_')
 
-        # Sort the DataFrame so that NaN values appear first in each column
-        missing_display = df[required_cols].sort_values(
-            by=required_cols, key=lambda col: col.isna(), ascending=False)
+        # Display dataframe with rows only missing both age_at_diagnosis and age_of_onset
+        missing_display = df[required_cols][df[required_cols].isnull().any(axis=1)]
         st.dataframe(missing_display, use_container_width=True)
         st.stop()
 
@@ -300,6 +299,18 @@ if data_file is not None and study_name is not None:
             else:
                 st.dataframe(
                     df[df[['clinical_id', 'visit_month']].duplicated(keep=False)], use_container_width=True)
+                
+    # Warn if sample does not have visit_month = 0
+    month_subset = df.groupby('clinical_id')['visit_month'].apply(lambda x: 0 in x.values).reset_index()
+    month_subset.columns = ['clinical_id', 'has_zero_month']
+    no_zero_month = month_subset[~month_subset.has_zero_month]
+
+    zero_warn1, zero_warn2 = st.columns([2, 0.5])
+    zero_warn1.warning(
+        f'Warning: We have detected samples with no visit_month = 0. Please review data if this was unintended')
+    if zero_warn2.button('View Samples'):
+        st.markdown('_Samples Without visit_month = 0:_')
+        st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)])
 
     if stopapp:
         st.stop()
@@ -312,6 +323,15 @@ if data_file is not None and study_name is not None:
             st.markdown(f'_Negative values in column {col}:_')
             st.dataframe(df[df[col] < 0], use_container_width=True)
             st.stop()
+
+    # Make sure age cols are in chronological order
+    non_chronological = check_chronological_order(df)
+    if len(non_chronological) > 0:
+        st.error(f'We have detected ages that are not in chronological order.\
+                The age values should be in the following order: age_of_onset, age_at_diagnosis, age_at_baseline.')
+        chrono_subset = ['GP2ID', 'clinical_id', 'visit_month'] + age_cols
+        st.dataframe(non_chronological[chrono_subset])
+        st.stop()
 
     # Make sure ages are at least 25
     for col in age_cols:
@@ -406,8 +426,8 @@ if data_file is not None and study_name is not None:
 
     if st.session_state['btn']:
         # if st.button("Continue", on_click=callback1):
-        keep_vars = ['GP2ID', 'clinical_id', 'GP2_phenotype',
-                     'study_arm', 'study_type', 'visit_month',  get_varname]
+        keep_vars = ['GP2ID', 'clinical_id', 'visit_month', 'GP2_phenotype', 'diagnosis',
+                     'study_arm', 'study_type',  get_varname]
         keep_vars.extend(optional_vars)
         df_subset = df[keep_vars].copy()
 
@@ -446,13 +466,13 @@ if data_file is not None and study_name is not None:
                               ['GP2ID', 'visit_month'],
                               method='less_na')
 
-        with st.expander('###### _Subset of your data with minimal null values. :red[Click here to hide window]_', expanded=True):
+        with st.expander('###### _Hover over the dataframe and search using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
 
         # may need to move this higher to the initial QC before HY-specific QC
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
-        strat_val = {'Study Arm': 'study_arm', 'GP2 Phenotype': 'GP2_phenotype',
+        strat_val = {'GP2 Phenotype': 'GP2_phenotype', 'Study Arm': 'study_arm',
                      'Clinical State on Medication': 'clinical_state_on_medication',
                      'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(
@@ -513,6 +533,7 @@ if data_file is not None and study_name is not None:
             if selected_gp2id:
                 single_sample = df_final[df_final['GP2ID'] == selected_gp2id].drop(
                     columns=df_final.filter(regex='_jittered$').columns)
+                st.markdown('###### _Hover over the dataframe and search using the 🔎 in the top right._')
                 st.dataframe(single_sample, use_container_width=True)
 
             st.markdown('---------')

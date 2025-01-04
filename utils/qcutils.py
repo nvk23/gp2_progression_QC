@@ -53,10 +53,9 @@ def checkDup(df, keys):
   t_dup = t[t.duplicated()]
   n_dup = len(t_dup)
   if n_dup==0:
-    st.write(f'{len(df)} entries: No duplication')
-  if n_dup>0:
+    return []
+  elif n_dup>0:
     d_dup2 = df[df.duplicated(keep=False, subset=keys)].sort_values(keys)
-    # st.write(f'{len(df)} entries: {len(d_dup2)} duplicated entries are returned')
     return(d_dup2)
 
 
@@ -70,6 +69,14 @@ def data_naproc(df):
   df = df.fillna(999)
   return(df[cleancols], cleancols)
 
+def evaluate_ages(row):
+    ages = row[['age_of_onset', 'age_at_diagnosis', 'age_at_baseline']].dropna().tolist()
+    return ages == sorted(ages)
+
+def check_chronological_order(df):
+    result = df.apply(evaluate_ages, axis=1)
+    non_passing_entries = df[~result]
+    return non_passing_entries
 
 def detect_multiple_clindups(df):
   st.error(f'There seems to be a problem with this sample manifest')
