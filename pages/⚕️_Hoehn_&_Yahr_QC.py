@@ -321,9 +321,9 @@ if data_file is not None and study_name is not None:
 
     zero_warn1, zero_warn2 = st.columns([2, 0.5])
     zero_warn1.warning(
-        f'Warning: We have detected samples with no visit_month value of 0. Please review data if this was unintended')
+        f'Warning: We have detected samples with no visit month value of 0. Please review data if this was unintended')
     if zero_warn2.button('View Samples'):
-        st.markdown('_Samples Without visit_month Value of 0:_')
+        st.markdown('_Samples Without Visit Month of 0:_')
         st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)], use_container_width=True)
 
     if stopapp:
