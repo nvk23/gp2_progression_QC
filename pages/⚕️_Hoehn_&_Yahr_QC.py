@@ -170,6 +170,7 @@ if data_file is not None and study_name is not None:
 
         # Display only rows where values differ
         diff_rows = unequal_df[diff_values]
+        diff_rows.drop_duplicates(inplace = True)
         st.dataframe(diff_rows, use_container_width=True)
 
         # User selection for which dataset to continue with when > 1 discrepancies
