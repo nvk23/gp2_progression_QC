@@ -55,68 +55,83 @@ def plot_km_curve(df_sv, strata, threshold, direction):
     plt.grid(True)
     st.pyplot(plt)
 
-# def plot_km_curve_plotly(df_sv, strata, threshold, direction):
-#     """
-#     Plots an interactive Kaplan-Meier survival curve using Plotly.
+def plot_km_curve_plotly(df_sv, strata, threshold, direction):
+    """
+    Plots an interactive Kaplan-Meier survival curve using Plotly.
     
-#     Parameters:
-#         df_sv: pandas.DataFrame
-#             The DataFrame containing survival data.
-#         strata: str
-#             The column name for stratification.
-#         threshold: float
-#             Threshold value to display in the title.
-#         direction: str
-#             Direction of the event (e.g., "greater than" or "less than").
-#     """
-#     kmf = KaplanMeierFitter()
-#     fig = go.Figure()
+    Parameters:
+        df_sv: pandas.DataFrame
+            The DataFrame containing survival data.
+        strata: str
+            The column name for stratification.
+        threshold: float
+            Threshold value to display in the title.
+        direction: str
+            Direction of the event (e.g., "greater than" or "less than").
+    """
+    kmf = KaplanMeierFitter()
+    fig = go.Figure()
 
-#     # Plot the KM curve for each group in strata
-#     for name, grouped_df in df_sv.groupby(strata):
-#         kmf.fit(
-#             durations=grouped_df['censored_month'], 
-#             event_observed=grouped_df['event'], 
-#             label=name
-#         )
+    # Plot the KM curve for each group in strata
+    for name, grouped_df in df_sv.groupby(strata):
+        kmf.fit(
+            durations=grouped_df['censored_month'], 
+            event_observed=grouped_df['event'], 
+            label=name
+        )
         
-#         # Dynamically access the survival probability column
-#         # st.dataframe(kmf.survival_function_)
-#         survival_column = kmf.survival_function_.columns[0]  # Get the column dynamically
+        # Dynamically access the survival probability column
+        kmf_vals = kmf.survival_function_
+        survival_column = kmf_vals.columns[0]  # Get the column value dynamically
+        kmf_vals.reset_index(inplace = True)
+
+        # Repeat timeline values to match style of lifelines built-in function for KM plots
+        kmf_dup = pd.DataFrame({
+            'timeline': kmf_vals['timeline'].repeat(2).reset_index(drop=True),
+            'PD': kmf_vals['PD'].repeat(2).reset_index(drop=True)
+        })
+
+        # Shift the timeline index and drop null values
+        kmf_dup.loc[1::2, 'timeline'] = kmf_dup.loc[1::2, 'timeline'].shift(-1)
+        kmf_dup.dropna(inplace = True)
+
+        # Reset index with timeline as index
+        kmf_dup['timeline'] = kmf_dup['timeline'].astype(int)
+        kmf_dup = kmf_dup.set_index('timeline')
         
-#         # Add survival function to the plot
-#         fig.add_trace(go.Scatter(
-#             x=kmf.survival_function_.index,
-#             y=kmf.survival_function_[survival_column],
-#             mode='lines',
-#             name=f"{name}",
-#             line=dict(width=2)
-#         ))
+        # Add survival function to the plot with modified dataframe
+        fig.add_trace(go.Scatter(
+            x=kmf_dup.index,
+            y=kmf_dup[survival_column],
+            mode='lines',
+            name=f"{name}",
+            line=dict(width=2)
+        ))
 
-#     # Update layout for the plot
-#     fig.update_layout(
-#         title={
-#             'text': f'Kaplan-Meier Survival Curve: Event = {direction} a Score of {threshold}',
-#             'x': 0.5,
-#             'xanchor': 'center',
-#             'yanchor': 'top',
-#             'font': {
-#                 'size': 20
-#             }
-#         },
-#         xaxis_title='Time (Months)',
-#         yaxis_title='Survival Probability',
-#         xaxis=dict(showgrid=True),
-#         yaxis=dict(range=[0, 1], showgrid=True),
-#         showlegend = True,
-#         legend_title = strata,
-#         legend=dict(font=dict(size=14)),
-#         template='plotly_white',
-#         height=700 
-#     )
+    # Update layout for the plot
+    fig.update_layout(
+        title={
+            'text': f'Kaplan-Meier Survival Curve: Event = {direction} a Score of {threshold}',
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': {
+                'size': 20
+            }
+        },
+        xaxis_title='Time (Months)',
+        yaxis_title='Survival Probability',
+        xaxis=dict(showgrid=True),
+        yaxis=dict(range=[0, 1], showgrid=True),
+        showlegend = True,
+        legend_title = strata,
+        legend=dict(font=dict(size=14)),
+        template='plotly_white',
+        height=700 
+    )
 
-#     # Display the plot
-#     st.plotly_chart(fig, use_container_width=True)
+    # Display the plot
+    st.plotly_chart(fig, use_container_width=True)
 
 def add_jitter(arr, scale=0.1):
     return arr + np.random.normal(scale=scale, size=len(arr))
