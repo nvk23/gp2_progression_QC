@@ -50,7 +50,7 @@ def plot_km_curve(df_sv, strata, threshold, direction):
     plt.title(f'Kaplan-Meier Survival Curve: Event = {direction} a Score of {threshold}')
     plt.xlabel('Time (Months)')
     plt.ylabel('Survival Probability')
-    plt.ylim([0,1])
+    plt.ylim([0,1.01])
     plt.legend(title=strata)
     plt.grid(True)
     st.pyplot(plt)
