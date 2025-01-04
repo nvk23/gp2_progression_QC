@@ -151,13 +151,28 @@ if data_file is not None and study_name is not None:
         st.error(
             f'Discrepancies were found between overlapping columns in the GP2 Manifest and your uploaded file in the following columns: {unequal_cols}. \
             __Would you like to continue with your uploaded values or the manifest values?__')
+        
+        # Store column names with numerical values only
+        diff_num_cols = unequal_cols.copy()
 
+        # Add ID columns for more complete dataset display
         if 'clinical_id_manifest' not in unequal_cols:
             unequal_cols.insert(0, 'clinical_id')
         if 'GP2ID_manifest' not in unequal_cols:
             unequal_cols.insert(1, 'GP2ID')
 
-        st.dataframe(df[unequal_cols], use_container_width=True) # should we display all unequal values first?
+        # Display all values for full review of both datasets
+        # st.dataframe(df[unequal_cols], use_container_width=True)
+
+        # Only display rows with unequal values (> 1)
+        unequal_df = df[unequal_cols]
+        diff_values = unequal_df.apply(lambda row: any(abs(row[diff_num_cols[i]] - row[diff_num_cols[i + 1]]) > 1 for i in range(0, len(diff_num_cols), 2)), axis=1)
+
+        # Display only rows where values differ
+        diff_rows = unequal_df[diff_values]
+        st.dataframe(diff_rows, use_container_width=True)
+
+        # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
         continue_merge = uploaded2.selectbox('Continue with:', options=[
                                              '', 'Uploaded Values', 'Manifest Values'], index=0)
@@ -177,7 +192,6 @@ if data_file is not None and study_name is not None:
         else:
             st.stop()
     else:
-
         # Continue with uploaded data columns
         original_cols = [col.replace('_uploaded', '') for col in uploaded_cols]
         rename_cols = dict(zip(uploaded_cols, original_cols))
@@ -426,10 +440,16 @@ if data_file is not None and study_name is not None:
 
     if st.session_state['btn']:
         # if st.button("Continue", on_click=callback1):
-        keep_vars = ['GP2ID', 'clinical_id', 'visit_month', 'GP2_phenotype', 'diagnosis',
-                     'study_arm', 'study_type',  get_varname]
-        keep_vars.extend(optional_vars)
-        df_subset = df[keep_vars].copy()
+
+        # if want to keep specfic columns for display
+        # keep_vars = ['GP2ID', 'clinical_id', 'visit_month', 'age_at_baseline', 'age_at_diagnosis' 'GP2_phenotype', 'diagnosis',
+        #              'study_arm', 'study_type',  get_varname]
+        # keep_vars.extend(optional_vars)
+        # df_subset = df[keep_vars].copy()
+
+        # reorder columns for display
+        cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
+        df_subset = df[cols_order]
 
         nulls = checkNull(df_subset, get_varname)
         hy_qc_count1.metric(label="Null Values", value=len(nulls))
@@ -571,7 +591,10 @@ if data_file is not None and study_name is not None:
                         version = dt.datetime.today().strftime('%Y-%m-%d')
                         st.markdown(
                             f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
-                        st.dataframe(df, use_container_width=True)
+                        
+                        ### double check if we want before/after duplicate removal to be sent
+                        df_subset.drop(columns = 'n_missing', inplace = True)
+                        st.dataframe(df_subset, use_container_width=True)
                         st.markdown(
                             "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")
 
