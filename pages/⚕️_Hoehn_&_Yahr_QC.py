@@ -344,8 +344,10 @@ if data_file is not None and study_name is not None:
     if len(non_chronological) > 0:
         st.error(f'We have detected ages that are not in chronological order.\
                 The age values should be in the following order: age_of_onset, age_at_diagnosis, age_at_baseline.')
-        chrono_subset = ['GP2ID', 'clinical_id'] + age_cols
-        st.dataframe(non_chronological[chrono_subset], use_container_width=True)
+        chrono_subset = ['GP2ID', 'clinical_id', 'age_of_onset', 'age_at_diagnosis', 'age_at_baseline']
+        not_chronological = non_chronological[chrono_subset]
+        not_chronological.drop_duplicates(inplace = True)
+        st.dataframe(not_chronological, use_container_width=True)
         st.stop()
 
     # Make sure ages are at least 25
