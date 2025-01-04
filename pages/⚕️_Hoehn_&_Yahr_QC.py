@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.plotting import plot_km_curve_plotly, plot_interactive_visit_month, plot_interactive_first_vs_last
 from utils.qcutils import checkNull, subsetData, checkDup, check_chronological_order, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
 from utils.app_setup import config_page
@@ -541,7 +541,9 @@ if data_file is not None and study_name is not None:
             st.write('###')
             df_sv = create_survival_df(
                 df_final, threshold, direction, get_varname)
-            plot_km_curve(df_sv, selected_strata, threshold, direction)
+            
+            # plot_km_curve(df_sv, selected_strata, threshold, direction) # old method
+            plot_km_curve_plotly(df_sv, selected_strata, threshold, direction) # new method
 
             st.markdown('---------')
             st.markdown('### Review Individual Samples')
