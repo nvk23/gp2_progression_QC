@@ -321,10 +321,10 @@ if data_file is not None and study_name is not None:
 
     zero_warn1, zero_warn2 = st.columns([2, 0.5])
     zero_warn1.warning(
-        f'Warning: We have detected samples with no visit_month = 0. Please review data if this was unintended')
+        f'Warning: We have detected samples with no visit_month value of 0. Please review data if this was unintended')
     if zero_warn2.button('View Samples'):
-        st.markdown('_Samples Without visit_month = 0:_')
-        st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)])
+        st.markdown('_Samples Without visit_month Value of 0:_')
+        st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)], use_container_width=True)
 
     if stopapp:
         st.stop()
@@ -344,7 +344,7 @@ if data_file is not None and study_name is not None:
         st.error(f'We have detected ages that are not in chronological order.\
                 The age values should be in the following order: age_of_onset, age_at_diagnosis, age_at_baseline.')
         chrono_subset = ['GP2ID', 'clinical_id', 'visit_month'] + age_cols
-        st.dataframe(non_chronological[chrono_subset])
+        st.dataframe(non_chronological[chrono_subset], use_container_width=True)
         st.stop()
 
     # Make sure ages are at least 25
@@ -374,13 +374,13 @@ if data_file is not None and study_name is not None:
         st.error(
                 f'We have detected samples with inconsistent age_at_baseline values. Please correct this and re-upload.')
         st.markdown(f'_Samples with inconsistent age_at_baseline values:_')
-        st.dataframe(df[df.clinical_id.isin(inconsistent_baseline)])
+        st.dataframe(df[df.clinical_id.isin(inconsistent_baseline)], use_container_width=True)
         st.stop()
     elif len(inconsistent_outcome) > 0:
         st.error(
                 f'We have detected samples with inconsistent age_at_diagnosis or age_of_onset values. Please correct this and re-upload.')
         st.markdown(f'_Samples with inconsistent age_at_diagnosis or age_of_onset values:_')
-        st.dataframe(df[df.clinical_id.isin(inconsistent_outcome)])
+        st.dataframe(df[df.clinical_id.isin(inconsistent_outcome)], use_container_width=True)
         st.stop()
 
     # Make sure LEDD dosage falls in specific range if column exists
@@ -486,7 +486,7 @@ if data_file is not None and study_name is not None:
                               ['GP2ID', 'visit_month'],
                               method='less_na')
 
-        with st.expander('###### _Hover over the dataframe and search using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
+        with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
 
         # may need to move this higher to the initial QC before HY-specific QC
@@ -553,7 +553,7 @@ if data_file is not None and study_name is not None:
             if selected_gp2id:
                 single_sample = df_final[df_final['GP2ID'] == selected_gp2id].drop(
                     columns=df_final.filter(regex='_jittered$').columns)
-                st.markdown('###### _Hover over the dataframe and search using the 🔎 in the top right._')
+                st.markdown('###### _Hover over the dataframe and search for values using the 🔎 in the top right._')
                 st.dataframe(single_sample, use_container_width=True)
 
             st.markdown('---------')
