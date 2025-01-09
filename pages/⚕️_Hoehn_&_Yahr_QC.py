@@ -512,8 +512,9 @@ if data_file is not None and study_name is not None:
 
             # Highlight removed rows if any exist
             if len(df_subset) - len(df_final) > 0:
-                st.markdown('###### Please note that the above dataframe :red[deleted] the following rows, :red[highlighted in red], when removing duplicates in visit_month per sample ID.')
-
+                st.info('Please note that the following rows, :red[highlighted in red], have been deleted from the dataframe above to handle duplicate visit_month entries per sample ID. \
+                        Rows with less null values were prioritized, where applicable. Please make adjustments to your data if necessary.')
+                
                 # Style the duplicates dataframe
                 unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month',
                                     'clinical_state_on_medication']].duplicated(keep=False)]
