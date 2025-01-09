@@ -25,10 +25,11 @@ def subsetData(df, key, method='less_na'):
   Do the opposite if method=='bfill'
   """
   if method=='less_na':
-    df['n_missing'] = pd.isna(df).sum(axis=1)
-    df = df.sort_values(key+['n_missing']).copy()
-    df = df.drop_duplicates(subset=key, keep='first')
-    df = df.drop(columns=['n_missing']).copy()
+    df_new = df.copy()
+    df_new['n_missing'] = pd.isna(df_new).sum(axis=1)
+    df_new = df_new.sort_values(key+['n_missing']).copy()
+    df_new = df_new.drop_duplicates(subset=key, keep='first')
+    df_new = df_new.drop(columns=['n_missing']).copy()
 
   else:
       print('FFILL on process: DO NOT FORGET to sort before using this function!!')
@@ -39,7 +40,7 @@ def subsetData(df, key, method='less_na'):
       if method=='bfill':
         df = df.drop_duplicates(subset=key, keep='first').copy()
 
-  return(df)
+  return(df_new)
 
 
 def checkDup(df, keys):
@@ -58,7 +59,6 @@ def checkDup(df, keys):
     d_dup2 = df[df.duplicated(keep=False, subset=keys)].sort_values(keys)
     return(d_dup2)
 
-
 def data_naproc(df):
   navals = df.isna().sum().to_dict()
   cleancols = []
@@ -69,14 +69,17 @@ def data_naproc(df):
   df = df.fillna(999)
   return(df[cleancols], cleancols)
 
-def evaluate_ages(row):
-    ages = row[['age_of_onset', 'age_at_diagnosis', 'age_at_baseline']].dropna().tolist()
-    return ages == sorted(ages)
-
 def check_chronological_order(df):
-    result = df.apply(evaluate_ages, axis=1)
-    non_passing_entries = df[~result]
-    return non_passing_entries
+    # Invalid rows are not chronological and have difference > 1
+    invalid_rows = (
+        (df['age_at_diagnosis'] - df['age_at_baseline'] > 1) &
+        (df['age_at_baseline'] - df['age_of_onset'] > 1) &
+        ~((df['age_of_onset'] <= df['age_at_baseline']) &
+          (df['age_at_baseline'] <= df['age_at_diagnosis']))
+    )
+    
+    # Return invalid dataframe
+    return df[invalid_rows]
 
 def detect_multiple_clindups(df):
   st.error(f'There seems to be a problem with this sample manifest')
@@ -119,16 +122,20 @@ def sample_type_fix(df, allowed_samples, col):
     st.text('sample type count after removing undesired whitespaces')
     st.write(df[col].astype('str').value_counts())
 
-  
 
-def create_survival_df(df, thres, direction, outcome):
+def create_survival_df(df, thres, direction, outcome, strata):
     # Create the event column based on the threshold
     if direction == 'Greater Than or Equal To' or direction == 'greater':
         df['event'] = (df[outcome] >= thres).astype(int)
     elif direction == 'Less Than or Equal To':
         df['event'] = (df[outcome] <= thres).astype(int)
 
-    df_cs = df[['GP2ID', 'clinical_id', 'GP2_phenotype', 'study_arm', 'study_type']].drop_duplicates()
+    # Select columns to subset dataframe
+    subset_cols = ['GP2ID', 'clinical_id', 'GP2_phenotype', 'study_arm', 'study_type']
+    if not strata in(subset_cols):
+      subset_cols.append(strata)
+
+    df_cs = df[subset_cols].drop_duplicates()
 
     # Get the first occurrence of the event if it occurred
     df_event = df[df['event'] == 1].sort_values('visit_month').drop_duplicates(subset=['GP2ID'])

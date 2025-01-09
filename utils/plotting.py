@@ -88,7 +88,7 @@ def plot_km_curve_plotly(df_sv, strata, threshold, direction):
         # Repeat timeline values to match style of lifelines built-in function for KM plots
         kmf_dup = pd.DataFrame({
             'timeline': kmf_vals['timeline'].repeat(2).reset_index(drop=True),
-            'PD': kmf_vals['PD'].repeat(2).reset_index(drop=True)
+            survival_column: kmf_vals[survival_column].repeat(2).reset_index(drop=True)
         })
 
         # Shift the timeline index and drop null values
@@ -105,7 +105,7 @@ def plot_km_curve_plotly(df_sv, strata, threshold, direction):
             y=kmf_dup[survival_column],
             mode='lines',
             name=f"{name}",
-            line=dict(width=2)
+            line=dict(width=4)
         ))
 
     # Update layout for the plot
@@ -122,7 +122,7 @@ def plot_km_curve_plotly(df_sv, strata, threshold, direction):
         xaxis_title='Time (Months)',
         yaxis_title='Survival Probability',
         xaxis=dict(showgrid=True),
-        yaxis=dict(range=[0, 1], showgrid=True),
+        yaxis=dict(range=[0, 1.01], showgrid=True),
         showlegend = True,
         legend_title = strata,
         legend=dict(font=dict(size=14)),
@@ -136,7 +136,7 @@ def plot_km_curve_plotly(df_sv, strata, threshold, direction):
 def add_jitter(arr, scale=0.1):
     return arr + np.random.normal(scale=scale, size=len(arr))
 
-def plot_interactive_first_vs_last(df_sf, df, strata):
+def plot_interactive_first_vs_last(df_sf, strata):
     st.markdown('#### Comparison of First vs Last Score per Sample')
 
     # Add jitter to scores

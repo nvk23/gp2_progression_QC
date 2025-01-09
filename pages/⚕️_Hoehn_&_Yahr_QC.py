@@ -36,9 +36,9 @@ study_name = get_studycode()
 required_cols = ['clinical_id', 'visit_month',
                  'age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
 # Alert about any missing values
-required_cols_check = ['clinical_id',
-                       'visit_month', 'age_at_baseline', 'age_outcome']
-age_cols = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
+required_cols_check = ['clinical_id', 'visit_month', 'age_at_baseline', 'age_outcome']
+# age_cols = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
+age_cols = {'age_at_baseline': 125, 'age_of_onset': 120, 'age_at_diagnosis': 120}
 
 # Can default all cols to None and delete dictionary if we prefer
 optional_cols = {'clinical_state_on_medication': None,
@@ -69,22 +69,20 @@ if 'variable' not in st.session_state:
 def callback1():
     st.session_state['btn'] = True
 
-
 def null_callback1():
     st.session_state['add_nulls'] = True
-
 
 def plot_callback1():
     st.session_state['plot_val'] = True
 
+def plot_callback2():
+    st.session_state['plot_val'] = False
 
 def email_callback1():
     st.session_state['send_email'] = True
 
-
 def upload_callback1():
     st.session_state['upload_bucket'] = True
-
 
 def callback2():
     st.session_state['btn'] = False
@@ -141,6 +139,10 @@ if data_file is not None and study_name is not None:
     # Identify equivalent columns from uploaded file
     uploaded_cols = [col.replace('_manifest', '_uploaded')
                      for col in manifest_cols]
+    
+    # Ensure the columns being compared are numeric
+    for col in set(manifest_cols + uploaded_cols):
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # Compare the corresponding columns and only flag for > 1 age difference
     unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (abs(
@@ -263,7 +265,8 @@ if data_file is not None and study_name is not None:
     elif len(missing_HY) == 1:
         df[missing_HY] = None
 
-    # Missing values in required columns - more efficient method may exist
+    # Missing values in required columns
+
     check_missing = pd.DataFrame(
         df[required_cols_check].value_counts(dropna=False).reset_index())
 
@@ -277,11 +280,11 @@ if data_file is not None and study_name is not None:
         st.markdown('_Missing Required Values:_')
 
         # Display dataframe with rows only missing both age_at_diagnosis and age_of_onset
-        missing_display = df[required_cols][df[required_cols].isnull().any(axis=1)]
+        missing_display = df[required_cols][df[required_cols_check].isnull().any(axis=1)]
         st.dataframe(missing_display, use_container_width=True)
         st.stop()
 
-    # Make sure visit_month are in the right format
+    # Check data types of visit_month
     try:
         df['visit_month'] = df['visit_month'].astype(int)
         stopapp = False
@@ -339,19 +342,24 @@ if data_file is not None and study_name is not None:
             st.dataframe(df[df[col] < 0], use_container_width=True)
             st.stop()
 
-    # Make sure age cols are in chronological order
+    # Make sure age cols are in chronological order unless Prodromal
     non_chronological = check_chronological_order(df)
-    if len(non_chronological) > 0:
-        st.error(f'We have detected ages that are not in chronological order.\
-                The age values should be in the following order: age_of_onset, age_at_diagnosis, age_at_baseline.')
-        chrono_subset = ['GP2ID', 'clinical_id', 'age_of_onset', 'age_at_diagnosis', 'age_at_baseline']
-        not_chronological = non_chronological[chrono_subset]
+    non_prodromal = non_chronological[non_chronological.study_type != 'Prodromal']
+
+    ### double check that non-PD genetically enriched can be submitted - if not, can simplify
+    PD_cases = non_prodromal[~((non_prodromal.study_type == 'Genetically Enriched') & (non_prodromal.GP2_phenotype != 'PD'))]
+
+    if len(PD_cases) > 0:
+        st.error(f'We have detected ages that are not in chronological order in PD entries.\
+                The age values should be in the following increasing order: age_of_onset, age_at_diagnosis, age_at_baseline.')
+        chrono_subset = ['GP2ID', 'clinical_id', 'study_type', 'GP2_phenotype', 'diagnosis', 'age_of_onset', 'age_at_diagnosis', 'age_at_baseline']
+        not_chronological = PD_cases[chrono_subset]
         not_chronological.drop_duplicates(inplace = True)
         st.dataframe(not_chronological, use_container_width=True)
         st.stop()
 
-    # Make sure ages are at least 25
-    for col in age_cols:
+    # Make sure ages are in proper ranges with warning for ages below 25
+    for col in age_cols.keys():
         if df[df[col] < 25].shape[0] > 0:
             age_warn1, age_warn2 = st.columns([2, 0.5])
             age_warn1.warning(
@@ -363,6 +371,12 @@ if data_file is not None and study_name is not None:
             st.error(
                 f'We have detected ages of 0 in the {col} column. Please correct this and re-upload.')
             st.markdown(f'_{col} entries with age 0:_')
+            st.dataframe(df[df[col] == 0], use_container_width=True)
+            st.stop()
+        if df[df[col] > age_cols[col]].shape[0] > 0:
+            st.error(
+                f'We have detected ages that are older than our maximum value of {age_cols[col]} for the {col} column. Please correct this and re-upload.')
+            st.markdown(f'_{col} entries with ages over {age_cols[col]}:_')
             st.dataframe(df[df[col] == 0], use_container_width=True)
             st.stop()
 
@@ -485,12 +499,21 @@ if data_file is not None and study_name is not None:
 
         st.markdown('### Visualize Dataset')
 
+        # Merge on ID and visit_month to keep entries with least null values
         df_final = subsetData(df_subset,
                               ['GP2ID', 'visit_month'],
                               method='less_na')
 
         with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
+
+            ### TRY TO HIGHLIGHT DATAFRAME IN DUPLICATE ID + VISIT MONTH WITH THOSE THAT ARE DELETED - somehow highlight differences between entries
+            if len(df_subset) - len(df_final) > 0:
+                df_diff = df_subset.merge(df_final, how='left', indicator=True)
+                removed_rows = df_diff[df_diff['_merge'] == 'left_only'].drop(columns=['_merge'])
+                
+                st.markdown('__:red[Please note that the above dataframe deleted the following rows when removing duplicates in visit_month per sample ID:]__')
+                st.dataframe(removed_rows)
 
         # may need to move this higher to the initial QC before HY-specific QC
         st.markdown('Select a stratifying variable to plot:')
@@ -499,7 +522,7 @@ if data_file is not None and study_name is not None:
                      'Clinical State on Medication': 'clinical_state_on_medication',
                      'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(
-        ), index=0, label_visibility='collapsed')
+        ), index=0, label_visibility='collapsed', on_change=plot_callback2)
         selected_strata = strat_val[strata]
 
         # Make sure selected stratifying variable is in the dataframe
@@ -521,15 +544,16 @@ if data_file is not None and study_name is not None:
 
         btn2 = plot2.button('Continue', key='continue_plot',
                             on_click=plot_callback1)
+        
         if st.session_state['plot_val']:
             plot_interactive_visit_month(
                 df_final, get_varname, selected_strata)
 
             df_sv_temp = create_survival_df(
-                df_final, 3, 'greater', get_varname)
+                df_final, 3, 'greater', get_varname, selected_strata)
             df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
-            plot_interactive_first_vs_last(
-                df_sv_temp, df_final, selected_strata)
+
+            plot_interactive_first_vs_last(df_sv_temp, selected_strata)
 
             # using df_sv, event and censored_months, generate the show KM curve stratified by strata
             # take a threshold input
@@ -543,10 +567,10 @@ if data_file is not None and study_name is not None:
                 min_value=0, max_value=5, step=1, label='Threshold', value=3)
             st.write('###')
             df_sv = create_survival_df(
-                df_final, threshold, direction, get_varname)
+                df_final, threshold, direction, get_varname, selected_strata)
             
-            plot_km_curve(df_sv, selected_strata, threshold, direction) # old method
-            # plot_km_curve_plotly(df_sv, selected_strata, threshold, direction) # new method if deploy bug
+            # plot_km_curve(df_sv, selected_strata, threshold, direction) # old method
+            plot_km_curve_plotly(df_sv, selected_strata, threshold, direction) # new interactive method
 
             st.markdown('---------')
             st.markdown('### Review Individual Samples')
@@ -597,9 +621,12 @@ if data_file is not None and study_name is not None:
                         st.markdown(
                             f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
                         
-                        ### double check if we want before/after duplicate removal to be sent
-                        df_subset.drop(columns = 'n_missing', inplace = True)
-                        st.dataframe(df_subset, use_container_width=True)
+                        # If want to submit entries before duplicate removal
+                        # df_subset.drop(columns = 'n_missing', inplace = True)
+                        # st.dataframe(df_subset, use_container_width=True)
+
+                        # If want to submit entries after duplicate removal
+                        st.dataframe(df_final, use_container_width=True)
                         st.markdown(
                             "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")
 
