@@ -123,8 +123,9 @@ if data_file is not None and study_name is not None:
     if len(incorrect_cols) > 0:
         st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(check_cols)}_ to ensure proper data QC.")
     if len(no_req) > 0:
-        st.error(f"You are currently missing {len(no_req)} columns that are required to continue the QC process: __{', '.join(no_req)}__.")
-        st.stop()
+        if "age_at_baseline" not in no_req and "age_of_onset" not in no_req:
+            st.error(f"You are currently missing {len(no_req)} column(s) required to continue the QC process: __{', '.join(no_req)}__.")
+            st.stop()
     
     # Load GP2 Genotyping Data Master Key
     dfg = st.session_state.master_key.drop_duplicates(
@@ -255,6 +256,9 @@ if data_file is not None and study_name is not None:
             st.markdown('_All Columns:_')
             st.dataframe(df, use_container_width=True)
 
+    # Regardless of user selection add "clinical_state_on_medication" column
+    df['clinical_state_on_medication'] = optional_cols['clinical_state_on_medication']
+
     # Check for missing required columns from template
     if len(missing_req) > 0:
         init_cols1.error(f'The following required columns are missing: {missing_req}. \
@@ -315,12 +319,8 @@ if data_file is not None and study_name is not None:
             f'Warning: We have detected duplicated visit months within samples. Please review data if this was unintended.')
         if dup_warn2.button('View Duplicate Visits'):
             st.markdown('_Duplicate Visits:_')
-            if 'clinical_state_on_medication' in df.columns:
-                st.dataframe(df[df[['clinical_id', 'visit_month',
-                                    'clinical_state_on_medication']].duplicated(keep=False)], use_container_width=True)
-            else:
-                st.dataframe(
-                    df[df[['clinical_id', 'visit_month']].duplicated(keep=False)], use_container_width=True)
+            st.dataframe(df[df[['clinical_id', 'visit_month',
+                                'clinical_state_on_medication']].duplicated(keep=False)], use_container_width=True)
                 
     # Warn if sample does not have visit_month = 0
     month_subset = df.groupby('clinical_id')['visit_month'].apply(lambda x: 0 in x.values).reset_index()
@@ -500,7 +500,7 @@ if data_file is not None and study_name is not None:
 
         st.markdown('---------')
 
-        st.markdown('### Visualize Dataset')
+        st.markdown('### Visualize Cleaned Dataset')
 
         # Merge on ID and visit_month to keep entries with least null values
         df_final = subsetData(df_subset,
@@ -510,16 +510,17 @@ if data_file is not None and study_name is not None:
         with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
 
+            # Check for unequal duplicates that were removed and need user input
+            unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month',
+                                'clinical_state_on_medication']].duplicated(keep=False)]
+            unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
+
             # Highlight removed rows if any exist
-            if len(df_subset) - len(df_final) > 0:
+            if len(unequal_dup_rows) > 0:
                 st.info('Please note that the following rows, :red[highlighted in red], have been deleted from the dataframe above to handle duplicate visit_month entries per sample ID. \
                         Rows with less null values were prioritized, where applicable. Please make adjustments to your data if necessary.')
                 
-                # Style the duplicates dataframe
-                unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month',
-                                    'clinical_state_on_medication']].duplicated(keep=False)]
-                unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
-
+                # Style dataframes to highlight deleted rows in red
                 check_exist = pd.merge(unequal_dup_rows, df_final, how='left', indicator='row_kept')
                 check_exist.replace({'both': 'saved', 'left_only': 'deleted'}, inplace = True)
                 styled_duplicates = check_exist.style.apply(highlight_removed_rows, axis=1)
@@ -539,6 +540,10 @@ if data_file is not None and study_name is not None:
         if selected_strata not in df_final.columns:
             st.error(
                 'The selected stratifying variable is not in the data. Please select another variable to plot.')
+            st.stop()
+        elif df_final[selected_strata].isnull().all():
+            st.error(
+                'The selected stratifying variable only has null input values. Please select another variable to plot.')
             st.stop()
 
         # Make sure stratifying selections include required values to continue
