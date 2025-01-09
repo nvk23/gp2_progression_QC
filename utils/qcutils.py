@@ -30,7 +30,6 @@ def subsetData(df, key, method='less_na'):
     df_new = df_new.sort_values(key+['n_missing']).copy()
     df_new = df_new.drop_duplicates(subset=key, keep='first')
     df_new = df_new.drop(columns=['n_missing']).copy()
-
   else:
       print('FFILL on process: DO NOT FORGET to sort before using this function!!')
       df.update(df.groupby(key).fillna(method=method))
@@ -42,6 +41,11 @@ def subsetData(df, key, method='less_na'):
 
   return(df_new)
 
+def highlight_removed_rows(row):
+    # Check if the row of one dataframe exists in the other
+    if row.row_kept == 'deleted':
+        return ['background-color: #ffcccc'] * len(row)  # Highlight removed row in red
+    return [''] * len(row)  # No highlight for other rows
 
 def checkDup(df, keys):
   """

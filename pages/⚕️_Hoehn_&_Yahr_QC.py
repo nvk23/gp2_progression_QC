@@ -8,7 +8,7 @@ import streamlit as st
 from functools import reduce
 
 from utils.plotting import plot_km_curve, plot_km_curve_plotly, plot_interactive_visit_month, plot_interactive_first_vs_last
-from utils.qcutils import checkNull, subsetData, checkDup, check_chronological_order, create_survival_df
+from utils.qcutils import checkNull, subsetData, checkDup, highlight_removed_rows, check_chronological_order, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
 from utils.app_setup import config_page
 
@@ -24,13 +24,6 @@ config_page('Hoehn & Yahr QC')
 
 # Necessary paths
 template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
-data_file = st.sidebar.file_uploader(
-    "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
-
-# Google Drive Master Key access
-if 'master_key' not in st.session_state:
-    st.session_state.master_key = get_master()
-study_name = get_studycode()
 
 # Establish necessary columns
 required_cols = ['clinical_id', 'visit_month',
@@ -72,6 +65,9 @@ def callback1():
 def null_callback1():
     st.session_state['add_nulls'] = True
 
+def merge_callback1():
+    st.session_state['continue_merge'] = ''
+
 def plot_callback1():
     st.session_state['plot_val'] = True
 
@@ -101,7 +97,16 @@ with instructions:
     st.markdown('__③__ Select your GP2 Study Code.')
 st.markdown('---------')
 
-# When required user inputs are given
+# Data Uploader
+data_file = st.sidebar.file_uploader(
+    "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'], on_change = merge_callback1)
+
+# Google Drive Master Key access
+if 'master_key' not in st.session_state:
+    st.session_state.master_key = get_master()
+study_name = get_studycode()
+
+# Required inputs passed
 if data_file is not None and study_name is not None:
     st.markdown('### Your Data Overview')
     df = read_file(data_file)
@@ -177,16 +182,15 @@ if data_file is not None and study_name is not None:
 
         # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
-        continue_merge = uploaded2.selectbox('Continue with:', options=[
-                                             '', 'Uploaded Values', 'Manifest Values'], index=0)
+        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=['', 'Uploaded Values', 'Manifest Values'])
 
-        if continue_merge == 'Uploaded Values':
+        if st.session_state.continue_merge == 'Uploaded Values':
             rename_uploaded = [col.split('_uploaded')[0]
                                for col in uploaded_cols]
             rename_cols = dict(zip(uploaded_cols, rename_uploaded))
             df.rename(columns=rename_cols, inplace=True)
             df.drop(columns=manifest_cols, inplace=True)
-        elif continue_merge == 'Manifest Values':
+        elif st.session_state.continue_merge == 'Manifest Values':
             rename_manifest = [col.split('_manifest')[0]
                                for col in manifest_cols]
             rename_cols = dict(zip(manifest_cols, rename_manifest))
@@ -266,7 +270,6 @@ if data_file is not None and study_name is not None:
         df[missing_HY] = None
 
     # Missing values in required columns
-
     check_missing = pd.DataFrame(
         df[required_cols_check].value_counts(dropna=False).reset_index())
 
@@ -342,11 +345,9 @@ if data_file is not None and study_name is not None:
             st.dataframe(df[df[col] < 0], use_container_width=True)
             st.stop()
 
-    # Make sure age cols are in chronological order unless Prodromal
+    # Make sure age cols are in chronological order unless Prodromal and non-PD Genetically Enriched
     non_chronological = check_chronological_order(df)
     non_prodromal = non_chronological[non_chronological.study_type != 'Prodromal']
-
-    ### double check that non-PD genetically enriched can be submitted - if not, can simplify
     PD_cases = non_prodromal[~((non_prodromal.study_type == 'Genetically Enriched') & (non_prodromal.GP2_phenotype != 'PD'))]
 
     if len(PD_cases) > 0:
@@ -487,6 +488,7 @@ if data_file is not None and study_name is not None:
                 st.dataframe(dups, use_container_width=True)
 
         # Make sure either HY scale is in the range 0 <= y <= 5
+        df[get_varname] = pd.to_numeric(df[get_varname], errors='coerce')
         var_range_check = df[(df[get_varname] > 5) | (df[get_varname] < 0)]
         if var_range_check.shape[0] > 0:
             st.error(
@@ -501,19 +503,25 @@ if data_file is not None and study_name is not None:
 
         # Merge on ID and visit_month to keep entries with least null values
         df_final = subsetData(df_subset,
-                              ['GP2ID', 'visit_month'],
+                              ['GP2ID', 'visit_month', 'clinical_state_on_medication'],
                               method='less_na')
 
         with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
 
-            ### TRY TO HIGHLIGHT DATAFRAME IN DUPLICATE ID + VISIT MONTH WITH THOSE THAT ARE DELETED - somehow highlight differences between entries
+            # Highlight removed rows if any exist
             if len(df_subset) - len(df_final) > 0:
-                df_diff = df_subset.merge(df_final, how='left', indicator=True)
-                removed_rows = df_diff[df_diff['_merge'] == 'left_only'].drop(columns=['_merge'])
-                
-                st.markdown('__:red[Please note that the above dataframe deleted the following rows when removing duplicates in visit_month per sample ID:]__')
-                st.dataframe(removed_rows)
+                st.markdown('###### Please note that the above dataframe :red[deleted] the following rows, :red[highlighted in red], when removing duplicates in visit_month per sample ID.')
+
+                # Style the duplicates dataframe
+                unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month',
+                                    'clinical_state_on_medication']].duplicated(keep=False)]
+                unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
+
+                check_exist = pd.merge(unequal_dup_rows, df_final, how='left', indicator='row_kept')
+                check_exist.replace({'both': 'saved', 'left_only': 'deleted'}, inplace = True)
+                styled_duplicates = check_exist.style.apply(highlight_removed_rows, axis=1)
+                st.dataframe(styled_duplicates)
 
         # may need to move this higher to the initial QC before HY-specific QC
         st.markdown('Select a stratifying variable to plot:')

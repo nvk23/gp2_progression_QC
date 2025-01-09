@@ -18,6 +18,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 def studycode_callback():
     st.session_state['keepcode'] = st.session_state['mycode']
+    st.session_state['continue_merge'] = ''
 
 
 def get_master():
