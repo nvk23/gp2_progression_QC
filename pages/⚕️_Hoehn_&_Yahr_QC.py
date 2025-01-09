@@ -112,19 +112,20 @@ if data_file is not None and study_name is not None:
     df = read_file(data_file)
 
     # Make sure uploaded dataframe matches exact names to prep for merge
-    incorrect_req = np.setdiff1d(required_cols, df.columns)
-    incorrect_optional = np.setdiff1d(list(optional_cols.keys()), df.columns)
+    check_cols = required_cols.copy()
+    check_cols.extend(outcomes_dict.values())
+    check_cols.extend(optional_cols.keys())
+    incorrect_cols = np.setdiff1d(df.columns, check_cols)
 
-    # Only alert user about values in their uploaded data
-    req_df = [col for col in incorrect_req if col in df.columns]
-    opt_df = [col for col in incorrect_optional if col in df.columns]
+    # Check if any required column names are missing
+    no_req = np.setdiff1d(required_cols, df.columns)
 
-    if len(opt_df) > 0:
-        st.warning(f"Please correct the column(s) __{', '.join(opt_df)}__ in your uploaded data to match the following optional template columns: {', '.join(list(optional_cols.keys()))}.")
-    if len(req_df) > 0:
-        st.error(f"Please correct the column(s) __{', '.join(req_df)}__ in your uploaded data to match the following required template options: {', '.join(required_cols)}.")
+    if len(incorrect_cols) > 0:
+        st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(check_cols)}_ to ensure proper data QC.")
+    if len(no_req) > 0:
+        st.error(f"You are currently missing {len(no_req)} columns that are required to continue the QC process: __{', '.join(no_req)}__.")
         st.stop()
-
+    
     # Load GP2 Genotyping Data Master Key
     dfg = st.session_state.master_key.drop_duplicates(
         subset='GP2ID', keep='first')
