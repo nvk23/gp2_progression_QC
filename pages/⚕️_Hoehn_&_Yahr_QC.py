@@ -636,12 +636,13 @@ if data_file is not None and study_name is not None:
                         st.markdown(
                             f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
                         
-                        # If want to submit entries before duplicate removal
-                        # df_subset.drop(columns = 'n_missing', inplace = True)
-                        # st.dataframe(df_subset, use_container_width=True)
+                        # Submit full dataset with markers for rows removed in unequal duplicate removal
+                        final_dataset = pd.concat([df_subset, check_exist])
+                        final_dataset.drop_duplicates(subset = final_dataset.columns[:-1], keep = 'last', inplace = True)
+                        final_dataset.sort_values(by=['GP2ID'], inplace = True)
+                        final_dataset.reset_index(drop = True, inplace = True)
+                        st.dataframe(final_dataset, use_container_width=True)
 
-                        # If want to submit entries after duplicate removal
-                        st.dataframe(df_final, use_container_width=True)
                         st.markdown(
                             "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")
 
@@ -662,7 +663,7 @@ if data_file is not None and study_name is not None:
                     if submitted:
                         st.session_state.send_email = False
                         send_email(study_name, 'send_data', contact_info={
-                            'name': submitter_name, 'email': submitter_email}, data=df, modality='HY')
+                            'name': submitter_name, 'email': submitter_email}, data=final_dataset, modality='HY')
                         email_form.empty()  # clear form from screen
                         st.success('Email sent, thank you!')
 
