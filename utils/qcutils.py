@@ -43,7 +43,7 @@ def subsetData(df, key, method='less_na'):
 
 def highlight_removed_rows(row):
     # Check if the row of one dataframe exists in the other
-    if row.row_kept == 'deleted':
+    if row.row_kept == 'remove':
         return ['background-color: #ffcccc'] * len(row)  # Highlight removed row in red
     return [''] * len(row)  # No highlight for other rows
 

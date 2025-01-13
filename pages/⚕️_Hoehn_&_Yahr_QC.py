@@ -34,8 +34,8 @@ required_cols_check = ['clinical_id', 'visit_month', 'age_at_baseline', 'age_out
 age_cols = {'age_at_baseline': 125, 'age_of_onset': 120, 'age_at_diagnosis': 120}
 
 # Can default all cols to None and delete dictionary if we prefer
-optional_cols = {'clinical_state_on_medication': None,
-                 'ledd_daily': None, 'medication_for_pd': None,  'dbs_status': None, }
+optional_cols = {'clinical_state_on_medication': None, 'medication_for_pd': None,  'dbs_status': None,
+                 'ledd_daily': None, 'comments': None}
 med_vals = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
             'medication_for_pd': ['Yes', 'No', 'Unknown'],
             'dbs_status': ['Yes', 'No', 'Unknown', 'Not applicable']}
@@ -134,7 +134,7 @@ if data_file is not None and study_name is not None:
 
     # Make sure this is consistent among all manifest versions
     dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)
-    df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'diagnosis', 'age_at_baseline', 'age_of_onset',
+    df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'GP2_PHENO', 'diagnosis', 'age_at_baseline', 'age_of_onset',
                            'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
 
     # Will print total count metrics at the top of the page
@@ -245,8 +245,8 @@ if data_file is not None and study_name is not None:
     missing_req = np.setdiff1d(required_cols, df.columns)
     init_cols1, init_cols2 = st.columns([2, 0.5])
     if len(missing_optional) > 0:
-        init_cols1.warning(f'Warning: The following optional columns are missing: {missing_optional}. \
-                Please use the template sheet if you would like to add these values or initialize with null values.')
+        init_cols1.warning(f"Warning: The following optional columns are missing: {', '.join(missing_optional)}. \
+                Please use the template sheet if you would like to add these values or initialize with null values.")
         add_nulls = init_cols2.button(
             'Fill Columns with Null Values', on_click=null_callback1)
         if st.session_state['add_nulls']:
@@ -258,6 +258,7 @@ if data_file is not None and study_name is not None:
 
     # Regardless of user selection add "clinical_state_on_medication" column
     df['clinical_state_on_medication'] = optional_cols['clinical_state_on_medication']
+    df['dbs_status'] = optional_cols['dbs_status']
 
     # Check for missing required columns from template
     if len(missing_req) > 0:
@@ -313,14 +314,15 @@ if data_file is not None and study_name is not None:
         stopapp = True
 
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
-    if df.duplicated(subset=['clinical_id', 'visit_month']).sum() > 0:
+    if df.duplicated(subset=['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status']).sum() > 0:
         dup_warn1, dup_warn2 = st.columns([2, 0.5])
         dup_warn1.warning(
-            f'Warning: We have detected duplicated visit months within samples. Please review data if this was unintended.')
+            f'Warning: We have detected samples with duplicated visit months, clinical state on medication, and DBS status.\
+            Please review data if this was unintended.')
         if dup_warn2.button('View Duplicate Visits'):
             st.markdown('_Duplicate Visits:_')
             st.dataframe(df[df[['clinical_id', 'visit_month',
-                                'clinical_state_on_medication']].duplicated(keep=False)], use_container_width=True)
+                                'clinical_state_on_medication', 'dbs_status']].duplicated(keep=False)], use_container_width=True)
                 
     # Warn if sample does not have visit_month = 0
     month_subset = df.groupby('clinical_id')['visit_month'].apply(lambda x: 0 in x.values).reset_index()
@@ -414,8 +416,12 @@ if data_file is not None and study_name is not None:
     # Check that clinical variables have correct values if they're in the data
     optional_vars = [col for col in list(
         optional_cols.keys()) if col in df.columns]
+    
+    ### Clean up eventually
     if 'ledd_daily' in optional_vars:
         optional_vars.remove('ledd_daily')
+    if 'comments' in optional_vars:
+        optional_vars.remove('comments')
     for col in optional_vars:
         wrong_med_vals = df[(~df[col].isin(med_vals[col]))
                             & (df[col].notnull())]
@@ -473,8 +479,8 @@ if data_file is not None and study_name is not None:
         nulls = checkNull(df_subset, get_varname)
         hy_qc_count1.metric(label="Null Values", value=len(nulls))
 
-        dups = checkDup(df_subset, ['GP2ID', 'visit_month'])
-        hy_qc_count2.metric(label="Duplicate Values", value=len(dups))
+        dups = checkDup(df_subset, list(df_subset.columns))
+        hy_qc_count2.metric(label="Duplicate Rows", value=len(dups))
 
         # Add buttons to check null and duplicate samples
         if len(nulls) > 0:
@@ -483,10 +489,11 @@ if data_file is not None and study_name is not None:
                 st.markdown('_Null Values:_')
                 st.dataframe(nulls, use_container_width=True)
         if len(dups) > 0:
-            view_dup = hy_qc_count3.button('Review Duplicate Values')
+            view_dup = hy_qc_count3.button('Review Duplicate Rows')
             if view_dup:
-                st.markdown('_Duplicate Values:_')
+                st.markdown('_Duplicate Rows:_')
                 st.dataframe(dups, use_container_width=True)
+                st.markdown('_All duplicated rows will be merged, keeping the first unique entry._')
 
         # Make sure either HY scale is in the range 0 <= y <= 5
         df[get_varname] = pd.to_numeric(df[get_varname], errors='coerce')
@@ -504,32 +511,32 @@ if data_file is not None and study_name is not None:
 
         # Merge on ID and visit_month to keep entries with least null values
         df_final = subsetData(df_subset,
-                              ['GP2ID', 'visit_month', 'clinical_state_on_medication'],
+                              ['GP2ID', 'visit_month'],
                               method='less_na')
 
         with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
 
             # Check for unequal duplicates that were removed and need user input
-            unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month',
-                                'clinical_state_on_medication']].duplicated(keep=False)]
+            unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month']].duplicated(keep=False)]
             unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
 
             # Highlight removed rows if any exist
             if len(unequal_dup_rows) > 0:
-                st.info('Please note that the following rows, :red[highlighted in red], have been deleted from the dataframe above to handle duplicate visit_month entries per sample ID. \
-                        Rows with less null values were prioritized, where applicable. Please make adjustments to your data if necessary.')
+                st.info('Please note that the following rows, :red[highlighted in red], will be removed from the dataframe above to handle duplicate visit month entries per sample ID. \
+                        Rows with less null values were prioritized, where applicable. If you disagree with the dropped column, please make adjustments to your data or add a note in the \
+                        "comments" column. __All rows will still be sent to us, but some analyses require duplicated visit month removal.__')
                 
                 # Style dataframes to highlight deleted rows in red
                 check_exist = pd.merge(unequal_dup_rows, df_final, how='left', indicator='row_kept')
-                check_exist.replace({'both': 'saved', 'left_only': 'deleted'}, inplace = True)
+                check_exist.replace({'both': 'save', 'left_only': 'remove'}, inplace = True)
                 styled_duplicates = check_exist.style.apply(highlight_removed_rows, axis=1)
                 st.dataframe(styled_duplicates)
 
         # may need to move this higher to the initial QC before HY-specific QC
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
-        strat_val = {'GP2 Phenotype': 'GP2_phenotype', 'Study Arm': 'study_arm',
+        strat_val = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm',
                      'Clinical State on Medication': 'clinical_state_on_medication',
                      'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(
