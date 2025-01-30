@@ -8,14 +8,6 @@ def checkNull(df, voi):
     to observe null values within context
     """
     nulls = df[df.loc[:,voi].isnull()]
-    # n_null = len(nulls)
-  
-    # if n_null==0:
-    #     st.write(f'{len(df)} entries: No null values')
-    # if n_null>0:
-    #     st.write(f'{len(df)} entries: {n_null} null entries were found')
-    #     st.dataframe(nulls)
-
     return(nulls)
 
 def subsetData(df, key, method='less_na'):
@@ -163,3 +155,11 @@ def create_survival_df(df, thres, direction, outcome, strata):
                             on='GP2ID', how='left')
 
     return df_sv_return
+
+def manifest_compare():
+   # compare to uploaded data
+   pass
+
+def manifest_check():
+   # check IDs
+   pass

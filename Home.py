@@ -13,9 +13,10 @@ import datetime
 # from google.cloud import storage
 
 sys.path.append('utils')
-from app_setup import config_page
+from utils.app_setup import AppConfig, HY
 
-config_page('Home')
+app = AppConfig('Home')
+app.config_page()
 
 # Main title
 st.markdown("<h2 style='text-align: center; color: #B8390E; font-family: Verdana; '>GP2 Progression Quality Control</h1>", unsafe_allow_html=True)

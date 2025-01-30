@@ -8,81 +8,14 @@ import streamlit as st
 from functools import reduce
 
 from utils.plotting import plot_km_curve, plot_km_curve_plotly, plot_interactive_visit_month, plot_interactive_first_vs_last
-from utils.qcutils import checkNull, subsetData, checkDup, highlight_removed_rows, check_chronological_order, create_survival_df
+from utils.data_prep import checkNull, subsetData, checkDup, highlight_removed_rows, check_chronological_order, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
-from utils.app_setup import config_page
+from utils.app_setup import AppConfig, HY
 
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets.json"
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "secrets/secrets_R8.json" # FOR TESTING ONLY
-
-# Moving forward with email only for now
-# bucket_name = ''
-# bucket_destination = ''
-
-config_page('Hoehn & Yahr QC')
-
-# Necessary paths
-template_link = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
-
-# Establish necessary columns
-required_cols = ['clinical_id', 'visit_month',
-                 'age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
-# Alert about any missing values
-required_cols_check = ['clinical_id', 'visit_month', 'age_at_baseline', 'age_outcome']
-# age_cols = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
-age_cols = {'age_at_baseline': 125, 'age_of_onset': 120, 'age_at_diagnosis': 120}
-
-# Can default all cols to None and delete dictionary if we prefer
-optional_cols = {'clinical_state_on_medication': None, 'medication_for_pd': None,  'dbs_status': None,
-                 'ledd_daily': None, 'comments': None}
-med_vals = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
-            'medication_for_pd': ['Yes', 'No', 'Unknown'],
-            'dbs_status': ['Yes', 'No', 'Unknown', 'Not applicable']}
-outcomes_dict = {'Original HY Scale': 'hoehn_and_yahr_stage',
-                 'Modified HY Scale': 'modified_hoehn_and_yahr_stage'}
-
-# Necessary session state initializiation/methods - can move to app_setup.py
-if 'data_chunks' not in st.session_state:
-    st.session_state['data_chunks'] = []
-if 'btn' not in st.session_state:
-    st.session_state['btn'] = False
-if 'plot_val' not in st.session_state:
-    st.session_state['plot_val'] = False
-if 'send_email' not in st.session_state:
-    st.session_state['send_email'] = False
-# if 'upload_bucket' not in st.session_state:
-#     st.session_state['upload_bucket'] = False
-if 'add_nulls' not in st.session_state:
-    st.session_state['add_nulls'] = False
-if 'variable' not in st.session_state:
-    st.session_state['variable'] = list(outcomes_dict.keys())
-
-# can move methods to app_setup.py
-def callback1():
-    st.session_state['btn'] = True
-
-def null_callback1():
-    st.session_state['add_nulls'] = True
-
-def merge_callback1():
-    st.session_state['continue_merge'] = ''
-
-def plot_callback1():
-    st.session_state['plot_val'] = True
-
-def plot_callback2():
-    st.session_state['plot_val'] = False
-
-def email_callback1():
-    st.session_state['send_email'] = True
-
-def upload_callback1():
-    st.session_state['upload_bucket'] = True
-
-def callback2():
-    st.session_state['btn'] = False
-
+hy = HY('Hoehn & Yahr QC')
+hy.config_page()
+hy.config_HY()
+hy.google_connect()
 
 # Page set-up
 st.markdown('## Hoehn and Yahr QC')
@@ -90,16 +23,16 @@ st.markdown('## Hoehn and Yahr QC')
 instructions = st.expander("##### :red[Getting Started]", expanded=True)
 with instructions:
     st.markdown(
-        f'__①__ Please download [the data dictionary and template]({template_link}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
+        f'__①__ Please download [the data dictionary and template]({HY.TEMPLATE_LINK}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
     st.markdown(
         '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
     # Optional: add feature that suggests study code name if file name found in master key - correct user submission if wrong
     st.markdown('__③__ Select your GP2 Study Code.')
 st.markdown('---------')
 
-# Data Uploader
+# Data Uploader - used to have continue_merge callback to make it '' again
 data_file = st.sidebar.file_uploader(
-    "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'], on_change = merge_callback1)
+    "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
 
 # Google Drive Master Key access
 if 'master_key' not in st.session_state:
@@ -112,20 +45,18 @@ if data_file is not None and study_name is not None:
     df = read_file(data_file)
 
     # Make sure uploaded dataframe matches exact names to prep for merge
-    check_cols = required_cols.copy()
-    check_cols.extend(outcomes_dict.values())
-    check_cols.extend(optional_cols.keys())
-    incorrect_cols = np.setdiff1d(df.columns, check_cols)
-
-    # Check if any required column names are missing
-    no_req = np.setdiff1d(required_cols, df.columns)
+    incorrect_cols, checked_cols = hy.missing_HY(df)
+    missing_outcome, missing_req = hy.check_required(df)
 
     if len(incorrect_cols) > 0:
-        st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(check_cols)}_ to ensure proper data QC.")
-    if len(no_req) > 0:
-        if "age_at_baseline" not in no_req and "age_of_onset" not in no_req:
-            st.error(f"You are currently missing {len(no_req)} column(s) required to continue the QC process: __{', '.join(no_req)}__.")
-            st.stop()
+        st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(checked_cols)}_ to ensure proper data QC.")
+    if len(missing_outcome) > 1:
+        st.error(f'Both Hoehn and Yahr Stage columns are missing: {missing_outcome}. \
+                Please use the template sheet to add at least one of these columns and re-upload.')
+        st.stop()
+    if len(missing_req) > 0:
+        st.error(f"You are currently missing {len(missing_req)} column(s) required to continue the QC process: __{', '.join(missing_req)}__.")
+        st.stop()
     
     # Load GP2 Genotyping Data Master Key
     dfg = st.session_state.master_key.drop_duplicates(
@@ -184,7 +115,7 @@ if data_file is not None and study_name is not None:
 
         # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
-        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=['', 'Uploaded Values', 'Manifest Values'])
+        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=['', 'Uploaded Values', 'Manifest Values'], on_change = hy.call_off, args = ['btn'])
 
         if st.session_state.continue_merge == 'Uploaded Values':
             rename_uploaded = [col.split('_uploaded')[0]
@@ -206,6 +137,7 @@ if data_file is not None and study_name is not None:
         rename_cols = dict(zip(uploaded_cols, original_cols))
         df.drop(columns = manifest_cols, inplace = True)
         df.rename(columns = dict(zip(uploaded_cols, original_cols)), inplace = True)
+
 
     # Check counts and GP2IDs
     n = len(df.clinical_id.unique())
@@ -241,40 +173,25 @@ if data_file is not None and study_name is not None:
         df['age_of_onset'])
 
     # Check for missing optional columns from template
-    missing_optional = np.setdiff1d(list(optional_cols.keys()), df.columns)
-    missing_req = np.setdiff1d(required_cols, df.columns)
+
+    ## See how to rewrite
+    missing_optional = np.setdiff1d(hy.OPTIONAL_COLS, df.columns)
     init_cols1, init_cols2 = st.columns([2, 0.5])
     if len(missing_optional) > 0:
         init_cols1.warning(f"Warning: The following optional columns are missing: {', '.join(missing_optional)}. \
                 Please use the template sheet if you would like to add these values or initialize with null values.")
         add_nulls = init_cols2.button(
-            'Fill Columns with Null Values', on_click=null_callback1)
+            'Fill Columns with Null Values', on_click=hy.call_on, args = ['add_nulls'])
         if st.session_state['add_nulls']:
-            for col in missing_optional:
-                df[col] = optional_cols[col]
+            hy.nullify(df, missing_optional)
         if add_nulls:
             st.markdown('_All Columns:_')
             st.dataframe(df, use_container_width=True)
 
-    # Regardless of user selection add "clinical_state_on_medication" column
-    df['clinical_state_on_medication'] = optional_cols['clinical_state_on_medication']
-    df['dbs_status'] = optional_cols['dbs_status']
+    # Regardless of user selection add "clinical_state_on_medication" column if don't exist already
+    hy.nullify(df, ['clinical_state_on_medication', 'dbs_status'])
 
-    # Check for missing required columns from template
-    if len(missing_req) > 0:
-        init_cols1.error(f'The following required columns are missing: {missing_req}. \
-                Please use the template sheet to add these columns and re-upload.')
-        st.stop()
-
-    # Check either/or HY-related required columns - may need to check if missing values in HY
-    missing_HY = np.setdiff1d(list(outcomes_dict.values()), df.columns)
-    if len(missing_HY) > 1:
-        init_cols1.error(f'Both Hoehn and Yahr Stage columns are missing: {missing_HY}. \
-                        Please use the template sheet to add at least one of these columns and re-upload.')
-        st.stop()
-    elif len(missing_HY) == 1:
-        df[missing_HY] = None
-
+    required_cols_check = ['clinical_id', 'visit_month', 'age_at_baseline', 'age_outcome']
     # Missing values in required columns
     check_missing = pd.DataFrame(
         df[required_cols_check].value_counts(dropna=False).reset_index())
@@ -284,34 +201,14 @@ if data_file is not None and study_name is not None:
     )]['count'].sum() for col in required_cols_check}
     if sum(missing_sums.values()) > 0:
         st.error(
-            f'There are missing entries in the required columns {required_cols}. Please fill in the missing cells.\
+            f'There are missing entries in the required columns {required_cols_check}. Please fill in the missing cells.\
             __Reminder that age_of_onset is only required if age_at_diagnosis is unavailable.__')
         st.markdown('_Missing Required Values:_')
 
         # Display dataframe with rows only missing both age_at_diagnosis and age_of_onset
-        missing_display = df[required_cols][df[required_cols_check].isnull().any(axis=1)]
+        missing_display = df[required_cols_check][df[required_cols_check].isnull().any(axis=1)]
         st.dataframe(missing_display, use_container_width=True)
         st.stop()
-
-    # Check data types of visit_month
-    try:
-        df['visit_month'] = df['visit_month'].astype(int)
-        stopapp = False
-    except:
-        st.error(f'We could not convert visit month to integer. Please check visit month refers to numeric month from Baseline.')
-        st.markdown('_Non-Integer Visit Months:_')
-        st.dataframe(df[df['visit_month'].apply(
-            lambda x: not x.isnumeric())], use_container_width=True)
-        stopapp = True
-
-    # Make sure visit month is in the range -1200 <= y <= 1200
-    df_range_check = df[(df.visit_month > 1200) | (df.visit_month < -1200)]
-    if df_range_check.shape[0] > 0:
-        st.error(
-            f'Please keep the visit month greater than or equal to -1200 and less than or equal to 1200.')
-        st.markdown('_Out-of-range Visit Months:_')
-        st.dataframe(df_range_check, use_container_width=True)
-        stopapp = True
 
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
     if df.duplicated(subset=['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status']).sum() > 0:
@@ -336,18 +233,6 @@ if data_file is not None and study_name is not None:
         st.markdown('_Samples Without Visit Month of 0:_')
         st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)], use_container_width=True)
 
-    if stopapp:
-        st.stop()
-
-    # Make sure clinical vars are non-negative integers
-    for col in outcomes_dict.values():
-        if df[df[col] < 0].shape[0] > 0:
-            st.error(
-                f'We have detected negative values in the {col} column. This is likely to be a mistake in the data.')
-            st.markdown(f'_Negative values in column {col}:_')
-            st.dataframe(df[df[col] < 0], use_container_width=True)
-            st.stop()
-
     # Make sure age cols are in chronological order unless Prodromal and non-PD Genetically Enriched
     non_chronological = check_chronological_order(df)
     non_prodromal = non_chronological[non_chronological.study_type != 'Prodromal']
@@ -362,27 +247,16 @@ if data_file is not None and study_name is not None:
         st.dataframe(not_chronological, use_container_width=True)
         st.stop()
 
-    # Make sure ages are in proper ranges with warning for ages below 25
-    for col in age_cols.keys():
-        if df[df[col] < 25].shape[0] > 0:
-            age_warn1, age_warn2 = st.columns([2, 0.5])
-            age_warn1.warning(
-                f'Warning: We have detected ages that are below 25 in the {col} column. Please check that this is correct.')
-            if age_warn2.button('View Ages Below 25', key=f'below_25_{col}'):
-                st.markdown(f'_Ages below 25 in column {col}:_')
-                st.dataframe(df[df[col] < 25], use_container_width=True)
-        if df[df[col] == 0].shape[0] > 0:
-            st.error(
-                f'We have detected ages of 0 in the {col} column. Please correct this and re-upload.')
-            st.markdown(f'_{col} entries with age 0:_')
-            st.dataframe(df[df[col] == 0], use_container_width=True)
-            st.stop()
-        if df[df[col] > age_cols[col]].shape[0] > 0:
-            st.error(
-                f'We have detected ages that are older than our maximum value of {age_cols[col]} for the {col} column. Please correct this and re-upload.')
-            st.markdown(f'_{col} entries with ages over {age_cols[col]}:_')
-            st.dataframe(df[df[col] == 0], use_container_width=True)
-            st.stop()
+    # Make sure numeric columns are in proper ranges - flag 25 and below for age columns; flag no 0 in visit_month
+    out_of_range = hy.check_ranges(df)
+    if out_of_range:
+        st.error(f'We have detected values that are out of range in the columns {out_of_range.keys()}. \
+                    Values in these columns should be numeric and between the following permitted ranges: Please correct this and re-upload.')
+        for col in out_of_range.keys():
+            col_range = HY.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, "Unknown Range"))
+            st.markdown(f'* {col} : {col_range}')
+            st.dataframe(out_of_range[col])
+        # st.stop()
 
     # Make sure age_at_baseline is consistent for the same clinical IDs
     inconsistent_baseline = df.groupby('clinical_id')['age_at_baseline'].nunique()
@@ -404,33 +278,14 @@ if data_file is not None and study_name is not None:
         st.dataframe(df[df.clinical_id.isin(inconsistent_outcome)], use_container_width=True)
         st.stop()
 
-    # Make sure LEDD dosage falls in specific range if column exists
-    if 'ledd_daily' in df.columns:
-        check_ledd = df[(df.ledd_daily < 0) | (df.ledd_daily > 10000)]
-        if check_ledd.shape[0] > 0:
-            st.warning(
-                f'Warning: Pleaes keep Levadopa Equivalent Dosage values per day greater than or equal to 0 and less than or equal to 10,000.')
-            st.markdown(f'_Daily LEDD Values out of this range:_')
-            st.dataframe(check_ledd, use_container_width=True)
-
     # Check that clinical variables have correct values if they're in the data
-    optional_vars = [col for col in list(
-        optional_cols.keys()) if col in df.columns]
-    
-    ### Clean up eventually
-    if 'ledd_daily' in optional_vars:
-        optional_vars.remove('ledd_daily')
-    if 'comments' in optional_vars:
-        optional_vars.remove('comments')
-    for col in optional_vars:
-        wrong_med_vals = df[(~df[col].isin(med_vals[col]))
-                            & (df[col].notnull())]
-        if wrong_med_vals.shape[0] > 0:
-            st.error(
-                f'Please make sure {col} values are {med_vals[col]} to continue.')
-            st.markdown(f'_Fix the following {col} values:_')
-            st.dataframe(wrong_med_vals, use_container_width=True)
-            st.stop()
+    invalid_med_vals = hy.check_med_values(df)
+    if invalid_med_vals:
+        st.error(f'Please make sure the following columns have the following permitted values to continue.')
+        for col in invalid_med_vals.keys():
+            st.error(f'* {col}: {hy.MED_VALS[col]}')
+            st.dataframe(invalid_med_vals[col])
+        st.stop()
 
     st.success('Your clinical data has passed all required up-front checks!')
     st.markdown('---------')
@@ -439,21 +294,23 @@ if data_file is not None and study_name is not None:
     hy_qc_col1, hy_qc_col2, hy_qc_col3 = st.columns(3)
     hy_qc_count1, hy_qc_count2, hy_qc_count3 = st.columns(3)
 
+    st.write(st.session_state['btn'])
+
     if 'counter' not in st.session_state:
         hy_qc1.markdown('### HY-Specific Quality Control')
         st.session_state['counter'] = 0
         hy_qc_col1.selectbox(
             "Choose an HY version", st.session_state['variable'], label_visibility='collapsed')
-        b1 = hy_qc_col2.button("Continue", on_click=callback1)
+        b1 = hy_qc_col2.button("Continue", on_click=hy.call_off, args = ['btn'])
         get_varname = None
     else:
         hy_qc1.markdown('### HY-Specific Quality Control')
         st.session_state['counter'] += 1
         if len(st.session_state['variable']) >= 1:
             hy_version = hy_qc_col1.selectbox(
-                "Choose an HY version", st.session_state['variable'], on_change=callback2, label_visibility='collapsed')
-            get_varname = outcomes_dict[hy_version]
-            b1 = hy_qc_col2.button("Continue", on_click=callback1)
+                "Choose an HY version", st.session_state['variable'], on_change=hy.call_off, args = ['btn'], label_visibility='collapsed')
+            get_varname = hy.OUTCOMES_DICT[hy_version]
+            hy_qc_col2.button("Continue", on_click = hy.call_on, args = ['btn'])
         else:
             st.markdown(
                 '<p class="medium-font"> You have successfully QCed all clinical variables, thank you!</p>', unsafe_allow_html=True)
@@ -462,15 +319,10 @@ if data_file is not None and study_name is not None:
                                                     on=['clinical_id',
                                                         'visit_month'],
                                                     how='outer'), st.session_state['data_chunks'])
+    st.write(st.session_state['btn'])
+
 
     if st.session_state['btn']:
-        # if st.button("Continue", on_click=callback1):
-
-        # if want to keep specfic columns for display
-        # keep_vars = ['GP2ID', 'clinical_id', 'visit_month', 'age_at_baseline', 'age_at_diagnosis' 'GP2_phenotype', 'diagnosis',
-        #              'study_arm', 'study_type',  get_varname]
-        # keep_vars.extend(optional_vars)
-        # df_subset = df[keep_vars].copy()
 
         # reorder columns for display
         cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
@@ -511,8 +363,8 @@ if data_file is not None and study_name is not None:
 
         # Merge on ID and visit_month to keep entries with least null values
         df_final = subsetData(df_subset,
-                              ['GP2ID', 'visit_month'],
-                              method='less_na')
+                                ['GP2ID', 'visit_month'],
+                                method='less_na')
 
         with st.expander('###### _Hover over the dataframe and search for values using the 🔎 in the top right. :red[Click here to hide window]_', expanded=True):
             st.dataframe(df_final, use_container_width=True)
@@ -537,10 +389,10 @@ if data_file is not None and study_name is not None:
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
         strat_val = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm',
-                     'Clinical State on Medication': 'clinical_state_on_medication',
-                     'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
+                        'Clinical State on Medication': 'clinical_state_on_medication',
+                        'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
         strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(
-        ), index=0, label_visibility='collapsed', on_change=plot_callback2)
+        ), index=0, label_visibility='collapsed', on_change=hy.call_off, args=['plot_val'])
         selected_strata = strat_val[strata]
 
         # Make sure selected stratifying variable is in the dataframe
@@ -554,19 +406,20 @@ if data_file is not None and study_name is not None:
             st.stop()
 
         # Make sure stratifying selections include required values to continue
-        if selected_strata in med_vals.keys():
+        if selected_strata in hy.MED_VALS.keys():
             wrong_med_vals = df_final[~df_final[selected_strata].isin(
-                med_vals[selected_strata])]
+                hy.MED_VALS[selected_strata])]
             if wrong_med_vals.shape[0] > 0:
                 st.error(
-                    f'Please make sure {selected_strata} values are {med_vals[selected_strata]} to continue.')
+                    f'Please make sure {selected_strata} values are {hy.MED_VALS[selected_strata]} to continue.')
                 st.markdown(f'_Fix the following {selected_strata} values:_')
                 st.dataframe(wrong_med_vals, use_container_width=True)
                 st.stop()
 
-        btn2 = plot2.button('Continue', key='continue_plot',
-                            on_click=plot_callback1)
-        
+        plot2.button('Continue', key='continue_plot', on_click = hy.call_on, args = ['plot_val'])
+        st.write(st.session_state.plot_val)
+        st.write(st.session_state.btn)
+            
         if st.session_state['plot_val']:
             plot_interactive_visit_month(
                 df_final, get_varname, selected_strata)
@@ -584,7 +437,7 @@ if data_file is not None and study_name is not None:
                 '#### Kaplan-Meier Curve for Reaching the Threshold Score')
             thresh1, thresh2, thresh3 = st.columns([1, 0.5, 1])
             direction = thresh1.radio(label='Direction', horizontal=True, options=[
-                                      'Greater Than or Equal To', 'Less Than or Equal To'])
+                                        'Greater Than or Equal To', 'Less Than or Equal To'])
             threshold = thresh2.number_input(
                 min_value=0, max_value=5, step=1, label='Threshold', value=3)
             st.write('###')
@@ -624,10 +477,10 @@ if data_file is not None and study_name is not None:
                 if yes_col1.button("QC another variable", use_container_width=True):
                     # will not work until Modified HY Field is added
                     st.session_state['variable'].remove(hy_version)
-                    callback2()
+                    hy.call_off('btn')
 
                 yes_col2.button("Email Data to GP2 Clinical Data Coordinator",
-                                use_container_width=True, on_click=email_callback1)
+                                use_container_width=True, on_click=hy.call_on, args = ['send_email'])
 
                 # necessary because of nested form/button
                 if st.session_state['send_email']:
@@ -677,7 +530,7 @@ if data_file is not None and study_name is not None:
                 excel_file, filename = to_excel(df=df,
                                                 studycode=study_name)
                 yes_col3.download_button("Download your Data", data=excel_file, file_name=filename,
-                                         mime="application/vnd.ms-excel", use_container_width=True)
+                                            mime="application/vnd.ms-excel", use_container_width=True)
 
                 # Currently moving forward with email-only submission
                 # yes_col3.button("Submit Data to GP2's Google Bucket",
@@ -708,5 +561,5 @@ if data_file is not None and study_name is not None:
 
             if qc_yesno == 'NO':
                 st.error("Please change any unexpected values in your clinical data and reupload \
-                         or get in touch with GP2's Cohort Integration Working Group if needed.")
+                            or get in touch with GP2's Cohort Integration Working Group if needed.")
                 st.stop()
