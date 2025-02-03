@@ -522,6 +522,7 @@ if data_file is not None and study_name is not None:
             unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
 
             # Highlight removed rows if any exist
+            check_exist = None
             if len(unequal_dup_rows) > 0:
                 st.info('Please note that the following rows, :red[highlighted in red], will be removed from the dataframe above to handle duplicate visit month entries per sample ID. \
                         Rows with less null values were prioritized, where applicable. If you disagree with the dropped column, please make adjustments to your data or add a note in the \
