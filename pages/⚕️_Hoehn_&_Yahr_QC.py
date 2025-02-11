@@ -645,7 +645,7 @@ if data_file is not None and study_name is not None:
                             f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
                         
                         # Submit full dataset with markers for rows removed in unequal duplicate removal
-                        if check_exist:
+                        if len(check_exist) > 0:
                             final_dataset = pd.concat([df_subset, check_exist])
                             final_dataset.drop_duplicates(subset = final_dataset.columns[:-1], keep = 'last', inplace = True)
                             final_dataset.sort_values(by=['GP2ID'], inplace = True)
