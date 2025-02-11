@@ -8,7 +8,7 @@ import streamlit as st
 from functools import reduce
 
 from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
-from utils.data_prep import checkNull, subsetData, checkDup, highlight_removed_rows, check_chronological_order, create_survival_df
+from utils.data_prep import checkNull, subsetData, checkDup, mark_removed_rows, check_chronological_order, check_consistent, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel
 from utils.app_setup import AppConfig, HY
 from utils.manifest_setup import ManifestConfig
@@ -112,13 +112,7 @@ if data_file is not None and study_name is not None:
         count2.metric(label="GP2 IDs Found", value=all_ids)
         count3.metric(label="Total Observations", value=len(df))
 
-    # Create column that combines values from age of diagnosis first then age of onset - can put in data_prep
-    df['age_outcome'] = df['age_at_diagnosis'].combine_first(
-        df['age_of_onset'])
-
     # Check for missing optional columns from template
-
-    ## See how to rewrite
     missing_optional = hy.missing_optional(df)
     init_cols1, init_cols2 = st.columns([2, 0.5])
     if len(missing_optional) > 0:
@@ -135,63 +129,33 @@ if data_file is not None and study_name is not None:
     # Regardless of user selection add "clinical_state_on_medication" column if don't exist already
     hy.nullify(df, ['clinical_state_on_medication', 'dbs_status'])
 
-    required_cols_check = ['clinical_id', 'visit_month', 'age_at_baseline', 'age_outcome']
-    # Missing values in required columns
-    check_missing = pd.DataFrame(
-        df[required_cols_check].value_counts(dropna=False).reset_index())
+    # Create column that combines values from age of diagnosis first then age of onset
+    hy.add_age_outcome(df) 
 
     # Checking for NaN values in each column and summing them
-    missing_sums = {col: check_missing[check_missing[col].isna(
-    )]['count'].sum() for col in required_cols_check}
-    if sum(missing_sums.values()) > 0:
+    df_nulls = hy.check_nulls(df)
+    if len(df_nulls) > 0:
         st.error(
-            f'There are missing entries in the required columns {required_cols_check}. Please fill in the missing cells.\
+            f'There are missing entries in the following required columns. Please fill in the missing cells.\
             __Reminder that age_of_onset is only required if age_at_diagnosis is unavailable.__')
         st.markdown('_Missing Required Values:_')
 
         # Display dataframe with rows only missing both age_at_diagnosis and age_of_onset
-        missing_display = df[required_cols_check][df[required_cols_check].isnull().any(axis=1)]
-        st.dataframe(missing_display, use_container_width=True)
+        st.dataframe(df_nulls, use_container_width=True)
         st.stop()
 
     # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
-    if df.duplicated(subset=['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status']).sum() > 0:
+    dup_cols = checkDup(df, ['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status'])
+    if len(dup_cols) > 0:
         dup_warn1, dup_warn2 = st.columns([2, 0.5])
         dup_warn1.warning(
             f'Warning: We have detected samples with duplicated visit months, clinical state on medication, and DBS status.\
             Please review data if this was unintended.')
         if dup_warn2.button('View Duplicate Visits'):
             st.markdown('_Duplicate Visits:_')
-            st.dataframe(df[df[['clinical_id', 'visit_month',
-                                'clinical_state_on_medication', 'dbs_status']].duplicated(keep=False)], use_container_width=True)
-                
-    # Warn if sample does not have visit_month = 0
-    month_subset = df.groupby('clinical_id')['visit_month'].apply(lambda x: 0 in x.values).reset_index()
-    month_subset.columns = ['clinical_id', 'has_zero_month']
-    no_zero_month = month_subset[~month_subset.has_zero_month]
+            st.dataframe(dup_cols, use_container_width=True)
 
-    zero_warn1, zero_warn2 = st.columns([2, 0.5])
-    zero_warn1.warning(
-        f'Warning: We have detected samples with no visit month value of 0. Please review data if this was unintended.')
-    if zero_warn2.button('View Samples'):
-        st.markdown('_Samples Without Visit Month of 0:_')
-        st.dataframe(df[df.clinical_id.isin(no_zero_month.clinical_id)], use_container_width=True)
-
-    # Make sure age cols are in chronological order unless Prodromal and non-PD Genetically Enriched
-    non_chronological = check_chronological_order(df)
-    non_prodromal = non_chronological[non_chronological.study_type != 'Prodromal']
-    PD_cases = non_prodromal[~((non_prodromal.study_type == 'Genetically Enriched') & (non_prodromal.GP2_phenotype != 'PD'))]
-
-    if len(PD_cases) > 0:
-        st.error(f'We have detected ages that are not in chronological order in PD entries.\
-                The age values should be in the following increasing order: age_of_onset, age_at_diagnosis, age_at_baseline.')
-        chrono_subset = ['GP2ID', 'clinical_id', 'study_type', 'GP2_phenotype', 'diagnosis', 'age_of_onset', 'age_at_diagnosis', 'age_at_baseline']
-        not_chronological = PD_cases[chrono_subset]
-        not_chronological.drop_duplicates(inplace = True)
-        st.dataframe(not_chronological, use_container_width=True)
-        st.stop()
-
-    # Make sure numeric columns are in proper ranges - flag 25 and below for age columns; flag no 0 in visit_month
+    # Make sure numeric columns are in proper ranges - flag 25 and below for age columns & 0 for visit_month
     out_of_range = hy.check_ranges(df)
     age_flags = hy.flag_ages(df, 25)
 
@@ -204,6 +168,18 @@ if data_file is not None and study_name is not None:
             st.dataframe(df[df[col].isin(out_of_range[col])])
         st.stop()
 
+    # Warn if sample does not have visit_month = 0
+    no_zero_month = hy.check_visit_months(df)
+    zero_warn1, zero_warn2 = st.columns([2, 0.5])
+
+    if len(no_zero_month) > 0:
+        zero_warn1.warning(
+            f'Warning: We have detected samples with no visit month value of 0. Please review data if this was unintended.')
+        if zero_warn2.button('View Samples'):
+            st.markdown('_Samples Without Visit Month of 0:_')
+            st.dataframe(no_zero_month, use_container_width=True)
+
+    # Warn if sample has age values < 25
     age_warn1, age_warn2 = st.columns([2, 0.5])
     if age_flags:
         age_warn1.warning(f'Warning: We have detected ages that are below 25 in the column(s) _{", ".join(list(age_flags.keys()))}_. \
@@ -213,28 +189,34 @@ if data_file is not None and study_name is not None:
                 st.markdown(f'* _{col}_')
                 st.dataframe(df[df[col].isin(age_flags[col])])
 
+    # Make sure age cols are in chronological order unless Prodromal and non-PD Genetically Enriched
+    not_chrono = check_chronological_order(df)
+
+    if len(not_chrono) > 0:
+        st.error(f'We have detected ages that are not in chronological order in PD entries.\
+                The age values should be in the following increasing order: age_of_onset, age_at_diagnosis, age_at_baseline.')
+        st.dataframe(not_chrono, use_container_width=True)
+        st.stop()
+
     # Make sure age_at_baseline is consistent for the same clinical IDs
-    inconsistent_baseline = df.groupby('clinical_id')['age_at_baseline'].nunique()
-    inconsistent_baseline = inconsistent_baseline[inconsistent_baseline > 1].index.tolist()
-
-    inconsistent_outcome = df.groupby('clinical_id')['age_outcome'].nunique()
-    inconsistent_outcome = inconsistent_outcome[inconsistent_outcome > 1].index.tolist()
-
-    if len(inconsistent_baseline) > 0:
+    diff_baseline = check_consistent(df, 'age_at_baseline')
+    diff_outcome = check_consistent(df, 'age_outcome')
+    
+    if len(diff_baseline) > 0:
         st.error(
                 f'We have detected samples with inconsistent age_at_baseline values. Please correct this and re-upload.')
         st.markdown(f'_Samples with inconsistent age_at_baseline values:_')
-        st.dataframe(df[df.clinical_id.isin(inconsistent_baseline)], use_container_width=True)
+        st.dataframe(diff_baseline, use_container_width=True)
         st.stop()
-    elif len(inconsistent_outcome) > 0:
+    elif len(diff_outcome) > 0:
         st.error(
                 f'We have detected samples with inconsistent age_at_diagnosis or age_of_onset values. Please correct this and re-upload.')
         st.markdown(f'_Samples with inconsistent age_at_diagnosis or age_of_onset values:_')
-        st.dataframe(df[df.clinical_id.isin(inconsistent_outcome)], use_container_width=True)
+        st.dataframe(diff_outcome, use_container_width=True)
         st.stop()
 
     # Check that clinical variables have correct values if they're in the data
-    invalid_med_vals = hy.check_med_values(df)
+    invalid_med_vals = hy.check_med_vals(df)
     if invalid_med_vals:
         st.error(f'Please make sure the following columns have the following permitted values to continue.')
         for col in invalid_med_vals.keys():
@@ -276,13 +258,12 @@ if data_file is not None and study_name is not None:
     if st.session_state['btn']:
 
         # reorder columns for display
-        cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
-        df_subset = df[cols_order]
+        df_subset = hy.reorder_cols(df)
 
         nulls = checkNull(df_subset, get_varname)
         hy_qc_count1.metric(label="Null Values", value=len(nulls))
 
-        dups = checkDup(df_subset, list(df_subset.columns))
+        dups = checkDup(df_subset, list(df_subset.columns), drop_dup = False)
         hy_qc_count2.metric(label="Duplicate Rows", value=len(dups))
 
         # Add buttons to check null and duplicate samples
@@ -311,8 +292,7 @@ if data_file is not None and study_name is not None:
             st.dataframe(df_final, use_container_width=True)
 
             # Check for unequal duplicates that were removed and need user input
-            unequal_dup_rows = df_subset[df_subset[['clinical_id', 'visit_month']].duplicated(keep=False)]
-            unequal_dup_rows.drop_duplicates(keep = False, inplace = True)
+            unequal_dup_rows = checkDup(df_subset, ['clinical_id', 'visit_month'])
 
             # Highlight removed rows if any exist
             if len(unequal_dup_rows) > 0:
@@ -321,40 +301,34 @@ if data_file is not None and study_name is not None:
                         "comments" column. __All rows will still be sent to us, but some analyses require duplicated visit month removal.__')
                 
                 # Style dataframes to highlight deleted rows in red
-                check_exist = pd.merge(unequal_dup_rows, df_final, how='left', indicator='row_kept')
-                check_exist.replace({'both': 'save', 'left_only': 'remove'}, inplace = True)
-                styled_duplicates = check_exist.style.apply(highlight_removed_rows, axis=1)
+                df_subset, styled_duplicates = mark_removed_rows(df_final, df_subset, unequal_dup_rows)
                 st.dataframe(styled_duplicates)
 
         # may need to move this higher to the initial QC before HY-specific QC
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
-        strat_val = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm',
-                        'Clinical State on Medication': 'clinical_state_on_medication',
-                        'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
-        strata = plot1.selectbox("Select a stratifying variable to plot:", strat_val.keys(
+        strata = plot1.selectbox("Select a stratifying variable to plot:", hy.STRAT_VALS.keys(
         ), index=0, label_visibility='collapsed', on_change=hy.call_off, args=['plot_val'])
-        selected_strata = strat_val[strata]
+        selected_strata = hy.STRAT_VALS[strata]
 
         # Make sure selected stratifying variable is in the dataframe
+        null_strata = checkNull(df_final, selected_strata)
         if selected_strata not in df_final.columns:
             st.error(
                 'The selected stratifying variable is not in the data. Please select another variable to plot.')
             st.stop()
-        elif df_final[selected_strata].isnull().all():
+        elif len(null_strata) == len(df_final):
             st.error(
                 'The selected stratifying variable only has null input values. Please select another variable to plot.')
             st.stop()
 
         # Make sure stratifying selections include required values to continue
         if selected_strata in hy.MED_VALS.keys():
-            wrong_med_vals = df_final[~df_final[selected_strata].isin(
-                hy.MED_VALS[selected_strata])]
-            if wrong_med_vals.shape[0] > 0:
+            if len(invalid_med_vals) > 0:
                 st.error(
                     f'Please make sure {selected_strata} values are {hy.MED_VALS[selected_strata]} to continue.')
                 st.markdown(f'_Fix the following {selected_strata} values:_')
-                st.dataframe(wrong_med_vals, use_container_width=True)
+                st.dataframe(invalid_med_vals[selected_strata], use_container_width=True)
                 st.stop()
 
         plot2.button('Continue', key='continue_plot', on_click = hy.call_on, args = ['plot_val'])
@@ -393,8 +367,7 @@ if data_file is not None and study_name is not None:
                 "Select GP2ID", df_final['GP2ID'].unique())
 
             if selected_gp2id:
-                single_sample = df_final[df_final['GP2ID'] == selected_gp2id].drop(
-                    columns=df_final.filter(regex='_jittered$').columns)
+                single_sample = df_final[df_final['GP2ID'] == selected_gp2id].drop(columns=df_final.filter(regex='_jittered$').columns)
                 st.markdown('###### _Hover over the dataframe and search for values using the 🔎 in the top right._')
                 st.dataframe(single_sample, use_container_width=True)
 
@@ -405,7 +378,6 @@ if data_file is not None and study_name is not None:
                                     ["YES", "NO"],
                                     index=None)
 
-            # Will send df instead of df_final because df_final was subset to eliminate NAs
             if qc_yesno == 'YES':
                 st.info('Thank you! Please review the following options:')
                 st.session_state['data_chunks'].append(df_final)
@@ -434,12 +406,9 @@ if data_file is not None and study_name is not None:
                         st.markdown(
                             f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
                         
-                        # Submit full dataset with markers for rows removed in unequal duplicate removal
-                        final_dataset = pd.concat([df_subset, check_exist])
-                        final_dataset.drop_duplicates(subset = final_dataset.columns[:-1], keep = 'last', inplace = True)
-                        final_dataset.sort_values(by=['GP2ID'], inplace = True)
-                        final_dataset.reset_index(drop = True, inplace = True)
-                        st.dataframe(final_dataset, use_container_width=True)
+                         # Submit full dataset with markers for rows removed in unequal duplicate removal
+                        df_subset.sort_values(by=['GP2ID']).reset_index(drop = True, inplace = True)
+                        st.dataframe(df_subset, use_container_width=True)
 
                         st.markdown(
                             "_If you'd like, you can hover over the table above and click the :blue[Download] symbol in the top-right corner to save your QC'ed data as a :blue[CSV] with the filename above._")

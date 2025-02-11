@@ -42,10 +42,21 @@ class AppConfig():
         for col in cols:
             df[col] = None
 
-    def missing_required(self, df, outcome_cols):
-        missing_outcome = np.setdiff1d(outcome_cols, df.columns)
+    def missing_required(self, df, extra_cols):
+        missing_extra = np.setdiff1d(extra_cols, df.columns)
         missing_req = np.setdiff1d(AppConfig.REQUIRED_COLS, df.columns)
-        return missing_outcome, missing_req
+        return missing_extra, missing_req
+    
+    def check_nulls(self, df, extra_cols, display_cols):
+        # Missing values in required columns
+        check_cols = AppConfig.REQUIRED_COLS.copy()
+        check_cols.extend(extra_cols)
+
+        show_cols = AppConfig.REQUIRED_COLS.copy()
+        show_cols.extend(display_cols)
+        df_nulls = df[show_cols][df[extra_cols].isna().any(axis=1)]
+        
+        return df_nulls
     
     def check_data_types(self, df):
         invalid_types = {}
@@ -55,6 +66,12 @@ class AppConfig():
                 if not non_numeric_values.empty:
                     invalid_types[col] = non_numeric_values.tolist()
         return invalid_types
+    
+    def check_visit_months(self, df):
+        month_subset = df.groupby('clinical_id')['visit_month'].apply(lambda x: 0 in x.values).reset_index()
+        month_subset.columns = ['clinical_id', 'has_zero_month']
+        no_zero_month = month_subset[~month_subset.has_zero_month]
+        return df[df.clinical_id.isin(no_zero_month.clinical_id)]
     
     def check_ranges(self, df):
         out_of_range = {}
@@ -73,6 +90,9 @@ class HY(AppConfig):
     MED_VALS = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
                 'medication_for_pd': ['Yes', 'No', 'Unknown'],
                 'dbs_status': ['Yes', 'No', 'Unknown', 'Not applicable']}
+    STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm',
+                'Clinical State on Medication': 'clinical_state_on_medication',
+                'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
     OUTCOMES_DICT = {'Original HY Scale': 'hoehn_and_yahr_stage',
                     'Modified HY Scale': 'modified_hoehn_and_yahr_stage'}
     SESSION_STATES = {'data_chunks': [], 'btn': False, 'plot_val': False, 'send_email': False, 'add_nulls': False,
@@ -96,8 +116,18 @@ class HY(AppConfig):
         missing_optional, missing_req = super().missing_required(df, HY.OPTIONAL_COLS)
         return missing_optional
     
+    def add_age_outcome(self, df):
+        df['age_outcome'] = df['age_at_diagnosis'].combine_first(df['age_of_onset'])
+
+    def reorder_cols(self, df):
+        cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
+        return df[cols_order]
+    
     def check_required(self, df):
         return super().missing_required(df, list(HY.OUTCOMES_DICT.values()))
+    
+    def check_nulls(self, df):
+        return super().check_nulls(df, ['age_at_baseline', 'age_outcome'], HY.AGE_COLS)
 
     def check_ranges(self, df):
         out_of_range = super().check_ranges(df)
@@ -122,7 +152,7 @@ class HY(AppConfig):
                 flagged_vals[col] = flag_ages.tolist()
         return flagged_vals
     
-    def check_med_values(self, df):
+    def check_med_vals(self, df):
         invalid_med_values = {}
         for col, valid_values in self.MED_VALS.items():
             if col in df.columns:

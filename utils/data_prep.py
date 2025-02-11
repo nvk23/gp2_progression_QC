@@ -35,7 +35,6 @@ def subsetData(df, key, method='less_na'):
 
     return (df_new)
 
-
 def highlight_removed_rows(row):
     # Check if the row of one dataframe exists in the other
     if row.row_kept == 'remove':
@@ -43,8 +42,19 @@ def highlight_removed_rows(row):
         return ['background-color: #ffcccc'] * len(row)
     return [''] * len(row)  # No highlight for other rows
 
+def mark_removed_rows(df_final, df_subset, unequal_dup_rows):
+    check_exist = pd.merge(unequal_dup_rows, df_final, how='left', indicator='row_kept')
+    check_exist.replace({'both': 'save', 'left_only': 'remove'}, inplace = True)
+    styled_duplicates = check_exist.style.apply(highlight_removed_rows, axis=1)
 
-def checkDup(df, keys):
+    final_dataset = pd.concat([df_subset, check_exist])
+    final_dataset.drop_duplicates(subset = final_dataset.columns[:-1], keep = 'last', inplace = True)
+    final_dataset.sort_values(by=['GP2ID'], inplace = True)
+    final_dataset.reset_index(drop = True, inplace = True)
+
+    return final_dataset, styled_duplicates
+
+def checkDup(df, keys, drop_dup = True):
     """
     This will check the duplicated observations by keys
     Keys should be provided as a list if they are multiple
@@ -57,8 +67,10 @@ def checkDup(df, keys):
     if n_dup == 0:
         return []
     elif n_dup > 0:
-        d_dup2 = df[df.duplicated(keep=False, subset=keys)].sort_values(keys)
-        return (d_dup2)
+        dup_df = df[df.duplicated(keep=False, subset=keys)].sort_values(keys)
+        if drop_dup:
+          dup_df.drop_duplicates(keep = False, inplace = True)
+        return (dup_df)
 
 
 def data_naproc(df):
@@ -82,8 +94,22 @@ def check_chronological_order(df):
     )
 
     # Return invalid dataframe
-    return df[invalid_rows]
+    non_chronological =df[invalid_rows]
+    non_prodromal = non_chronological[non_chronological.study_type != 'Prodromal']
+    PD_cases = non_prodromal[~((non_prodromal.study_type == 'Genetically Enriched') & (non_prodromal.GP2_phenotype != 'PD'))]
 
+    chrono_subset = ['GP2ID', 'clinical_id', 'study_type', 'GP2_phenotype', 'diagnosis', 'age_of_onset', 'age_at_diagnosis', 'age_at_baseline']
+    not_chrono = PD_cases[chrono_subset]
+    not_chrono.drop_duplicates(inplace = True)
+    return not_chrono
+
+def check_consistent(df, col):
+    inconsistent = df.groupby('clinical_id')[col].nunique()
+    inconsistent = inconsistent[inconsistent > 1].index.tolist()
+
+    diff_vals = df[df.clinical_id.isin(inconsistent)]
+
+    return diff_vals
 
 def detect_multiple_clindups(df):
     st.error(f'There seems to be a problem with this sample manifest')
