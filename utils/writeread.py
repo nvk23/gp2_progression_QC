@@ -53,31 +53,18 @@ def get_master():
         master_key = pd.read_csv(file_content, low_memory=False)
     return master_key
 
-
 def get_studycode():
-    if 'study_name' not in st.session_state:
-        # Create study code options for dropdown
-        study_codes = st.session_state.master_key.study.str.strip().dropna().unique().tolist()
-        study_codes = sorted(study_codes, key=str.lower)
-        st.session_state['study_name'] = study_codes # sort out if session state variable is necessary
+    # Create study code options for dropdown
+    study_codes = st.session_state.master_key.study.str.strip().dropna().unique().tolist()
+    study_codes = sorted(study_codes, key=str.lower)
 
     study_name = st.sidebar.selectbox(
         'Select your GP2 study code',
-        st.session_state['study_name'],
+        study_codes,
         key='mycode',
         index=None,
         on_change=studycode_callback)
     return study_name
-
-
-def upload_data(bucket_name, data, destination):
-    """Upload a file to the bucket."""
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(destination)
-    blob.upload_from_string(data)
-    return "File successfully uploaded to GP2 storage system"
-
 
 def read_file(data_file):
     if data_file.type == "text/csv":
@@ -103,10 +90,6 @@ def to_excel(df, studycode):
     # writer.save()
     processed_data = output.getvalue()
     return processed_data, filename
-
-# can add Captcha confirmation to avoid automated emails
-# can add function to customize file name to send
-# can auto add date/time to file name
 
 
 def send_email(studycode, activity, contact_info, data=None, modality='Clinical'):
@@ -153,11 +136,3 @@ def send_email(studycode, activity, contact_info, data=None, modality='Clinical'
     server.sendmail(sender, receiver, msg.as_string())
     server.quit()
 
-
-def upload_data(bucket_name, data, destination):
-    """Upload a file to the bucket."""
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(destination)
-    blob.upload_from_string(data)
-    return "File successfully uploaded to GP2 storage system"

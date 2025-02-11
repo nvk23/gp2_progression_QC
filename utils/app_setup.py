@@ -78,7 +78,7 @@ class HY(AppConfig):
     SESSION_STATES = {'data_chunks': [], 'btn': False, 'plot_val': False, 'send_email': False, 'add_nulls': False,
                       'variable': list(OUTCOMES_DICT.keys()), 'continue_merge': ''}
     AGE_COLS = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis'] # see if you can combine with required_cols
-    NUMERIC_RANGES = {'ledd_daily': [0, 10000], 'age_at_baseline': [25, 125], 'age_of_onset': [25, 120], 'age_at_diagnosis': [25, 120],
+    NUMERIC_RANGES = {'ledd_daily': [0, 10000], 'age_at_baseline': [0, 125], 'age_of_onset': [0, 120], 'age_at_diagnosis': [0, 120],
                       'hoehn_and_yahr_stage': [0, 5], 'modified_hoehn_and_yahr_stage': [0, 5]}
     
     def config_HY(self):
@@ -91,6 +91,10 @@ class HY(AppConfig):
         hy_all.extend(HY.OPTIONAL_COLS)
         no_req = np.setdiff1d(df.columns, hy_all)
         return no_req, hy_all
+    
+    def missing_optional(self, df):
+        missing_optional, missing_req = super().missing_required(df, HY.OPTIONAL_COLS)
+        return missing_optional
     
     def check_required(self, df):
         return super().missing_required(df, list(HY.OUTCOMES_DICT.values()))
@@ -108,6 +112,15 @@ class HY(AppConfig):
                 if not invalid_values.empty:
                     out_of_range[col] = invalid_values.tolist()
         return out_of_range
+    
+    def flag_ages(self, df, age):
+        flagged_vals = {}
+        
+        for col in self.AGE_COLS:
+            flag_ages = df[df[col] < age][col]
+            if not flag_ages.empty:
+                flagged_vals[col] = flag_ages.tolist()
+        return flagged_vals
     
     def check_med_values(self, df):
         invalid_med_values = {}

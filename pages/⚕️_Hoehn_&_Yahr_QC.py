@@ -7,10 +7,11 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from utils.plotting import plot_km_curve, plot_km_curve_plotly, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
 from utils.data_prep import checkNull, subsetData, checkDup, highlight_removed_rows, check_chronological_order, create_survival_df
-from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel, upload_data
+from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel
 from utils.app_setup import AppConfig, HY
+from utils.manifest_setup import ManifestConfig
 
 hy = HY('Hoehn & Yahr QC')
 hy.config_page()
@@ -26,11 +27,10 @@ with instructions:
         f'__①__ Please download [the data dictionary and template]({HY.TEMPLATE_LINK}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
     st.markdown(
         '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
-    # Optional: add feature that suggests study code name if file name found in master key - correct user submission if wrong
     st.markdown('__③__ Select your GP2 Study Code.')
 st.markdown('---------')
 
-# Data Uploader - used to have continue_merge callback to make it '' again
+# Data Uploader
 data_file = st.sidebar.file_uploader(
     "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
 
@@ -42,11 +42,11 @@ study_name = get_studycode()
 # Required inputs passed
 if data_file is not None and study_name is not None:
     st.markdown('### Your Data Overview')
-    df = read_file(data_file)
+    uploaded_df = read_file(data_file)
 
     # Make sure uploaded dataframe matches exact names to prep for merge
-    incorrect_cols, checked_cols = hy.missing_HY(df)
-    missing_outcome, missing_req = hy.check_required(df)
+    incorrect_cols, checked_cols = hy.missing_HY(uploaded_df)
+    missing_outcome, missing_req = hy.check_required(uploaded_df)
 
     if len(incorrect_cols) > 0:
         st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(checked_cols)}_ to ensure proper data QC.")
@@ -59,126 +59,70 @@ if data_file is not None and study_name is not None:
         st.stop()
     
     # Load GP2 Genotyping Data Master Key
-    dfg = st.session_state.master_key.drop_duplicates(
-        subset='GP2ID', keep='first')
-    dfg = dfg[dfg.study == study_name].copy()
-
-    # Make sure this is consistent among all manifest versions
-    dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)
-    df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'GP2_PHENO', 'diagnosis', 'age_at_baseline', 'age_of_onset',
-                           'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
-
-    # Will print total count metrics at the top of the page
-    count1, count2, count3 = st.columns(3)
-
-    # Identify columns from manifest
-    manifest_cols = [col for col in df.columns if col.endswith('_manifest')]
-
-    # Identify equivalent columns from uploaded file
-    uploaded_cols = [col.replace('_manifest', '_uploaded')
-                     for col in manifest_cols]
-    
-    # Ensure the columns being compared are numeric
-    for col in set(manifest_cols + uploaded_cols):
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Compare the corresponding columns and only flag for > 1 age difference
-    unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (abs(
-    df[x] - df[y]) <= 1).all() for col in (x, y)]
+    manifest = ManifestConfig(uploaded_df, study_name)
+    unequal_cols = manifest.compare_cols()
 
     # Need to fix any discrepancies between manifest and uploaded file before continuing
     if len(unequal_cols) > 0:
         st.error(
             f'Discrepancies were found between overlapping columns in the GP2 Manifest and your uploaded file in the following columns: {unequal_cols}. \
-            __Would you like to continue with your uploaded values or the manifest values?__')
-        
-        # Store column names with numerical values only
-        diff_num_cols = unequal_cols.copy()
+          __Would you like to continue with your uploaded values or the manifest values?__')
 
-        # Add ID columns for more complete dataset display
-        if 'clinical_id_manifest' not in unequal_cols:
-            unequal_cols.insert(0, 'clinical_id')
-        if 'GP2ID_manifest' not in unequal_cols:
-            unequal_cols.insert(1, 'GP2ID')
-
-        # Display all values for full review of both datasets
-        # st.dataframe(df[unequal_cols], use_container_width=True)
-
-        # Only display rows with unequal values (> 1)
-        unequal_df = df[unequal_cols]
-        diff_values = unequal_df.apply(lambda row: any(abs(row[diff_num_cols[i]] - row[diff_num_cols[i + 1]]) > 1 for i in range(0, len(diff_num_cols), 2)), axis=1)
-
-        # Display only rows where values differ
-        diff_rows = unequal_df[diff_values]
-        diff_rows.drop_duplicates(inplace = True)
+        diff_rows = manifest.find_diff(unequal_cols)
         st.dataframe(diff_rows, use_container_width=True)
 
         # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
-        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=['', 'Uploaded Values', 'Manifest Values'], on_change = hy.call_off, args = ['btn'])
+        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=[
+                                                              '', 'Uploaded Values', 'Manifest Values'], on_change=hy.call_off, args=['btn'])
 
-        if st.session_state.continue_merge == 'Uploaded Values':
-            rename_uploaded = [col.split('_uploaded')[0]
-                               for col in uploaded_cols]
-            rename_cols = dict(zip(uploaded_cols, rename_uploaded))
-            df.rename(columns=rename_cols, inplace=True)
-            df.drop(columns=manifest_cols, inplace=True)
-        elif st.session_state.continue_merge == 'Manifest Values':
-            rename_manifest = [col.split('_manifest')[0]
-                               for col in manifest_cols]
-            rename_cols = dict(zip(manifest_cols, rename_manifest))
-            df.rename(columns=rename_cols, inplace=True)
-            df.drop(columns=uploaded_cols, inplace=True)
-        else:
+        if st.session_state.continue_merge == '':
             st.stop()
+        else:
+            df = manifest.adjust_data(no_diff = False)
     else:
-        # Continue with uploaded data columns
-        original_cols = [col.replace('_uploaded', '') for col in uploaded_cols]
-        rename_cols = dict(zip(uploaded_cols, original_cols))
-        df.drop(columns = manifest_cols, inplace = True)
-        df.rename(columns = dict(zip(uploaded_cols, original_cols)), inplace = True)
-
+        df = manifest.adjust_data(no_diff = False)
+    
+    # Will print total count metrics at the top of the page
+    count1, count2, count3 = st.columns(3)
 
     # Check counts and GP2IDs
-    n = len(df.clinical_id.unique())
+    all_ids, non_gp2, df = manifest.get_ids()
 
-    id_not_in_GP2 = df[df.GP2ID.isnull()]['clinical_id'].unique()
     checkids1, checkids2 = st.columns([2, 0.5])
-    if len(id_not_in_GP2) == n:
+    if len(non_gp2) == all_ids:
         st.error(
             f'None of the clinical IDs are in GP2. Please check that your clinical IDs and selected GP2 Study Code ({study_name}) are correct.')
         st.stop()
-    elif len(id_not_in_GP2) > 0:
+    elif len(non_gp2) > 0:
         checkids1.warning(
             f'Warning: Some clinical IDs are not in the GP2 so the dataset. Dataset review will continue only with GP2 IDs.')
-        df = df[df.GP2ID.notnull()].copy()
-        n = len(df.clinical_id.unique())
-        count1.metric(label="Unique GP2 Clinical IDs", value=n)
+        count1.metric(label="Unique GP2 Clinical IDs", value = len(df.clinical_id.unique()))
         count2.metric(label="Clinical IDs Not Found in GP2",
-                      value=len(id_not_in_GP2))
+                      value=len(non_gp2))
         count3.metric(label="Total Observations for GP2 IDs", value=len(df))
 
         view_missing_ids = checkids2.button('Review IDs not Found in GP2')
         if view_missing_ids:
             st.markdown('_Non-GP2 Clinical IDs:_')
-            st.dataframe(id_not_in_GP2, use_container_width=True)
+            st.dataframe(non_gp2, use_container_width=True)
     else:
         # All IDs are in GP2
-        count1.metric(label="Unique Clinical IDs", value=n)
-        count2.metric(label="GP2 IDs Found", value=n)
+        count1.metric(label="Unique Clinical IDs", value=all_ids)
+        count2.metric(label="GP2 IDs Found", value=all_ids)
         count3.metric(label="Total Observations", value=len(df))
 
-    # Create column that combines values from age of diagnosis first then age of onset
+    # Create column that combines values from age of diagnosis first then age of onset - can put in data_prep
     df['age_outcome'] = df['age_at_diagnosis'].combine_first(
         df['age_of_onset'])
 
     # Check for missing optional columns from template
 
     ## See how to rewrite
-    missing_optional = np.setdiff1d(hy.OPTIONAL_COLS, df.columns)
+    missing_optional = hy.missing_optional(df)
     init_cols1, init_cols2 = st.columns([2, 0.5])
     if len(missing_optional) > 0:
-        init_cols1.warning(f"Warning: The following optional columns are missing: {', '.join(missing_optional)}. \
+        init_cols1.warning(f"Warning: The following optional columns are missing: _{', '.join(missing_optional)}_. \
                 Please use the template sheet if you would like to add these values or initialize with null values.")
         add_nulls = init_cols2.button(
             'Fill Columns with Null Values', on_click=hy.call_on, args = ['add_nulls'])
@@ -249,14 +193,25 @@ if data_file is not None and study_name is not None:
 
     # Make sure numeric columns are in proper ranges - flag 25 and below for age columns; flag no 0 in visit_month
     out_of_range = hy.check_ranges(df)
+    age_flags = hy.flag_ages(df, 25)
+
     if out_of_range:
-        st.error(f'We have detected values that are out of range in the columns {out_of_range.keys()}. \
-                    Values in these columns should be numeric and between the following permitted ranges: Please correct this and re-upload.')
+        st.error(f'We have detected values that are out of range in the column(s) _{", ".join(list(out_of_range.keys()))}_. \
+                    Values in these columns should be numeric and between the following permitted ranges:')
         for col in out_of_range.keys():
             col_range = HY.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, "Unknown Range"))
-            st.markdown(f'* {col} : {col_range}')
-            st.dataframe(out_of_range[col])
-        # st.stop()
+            st.markdown(f'* _{col} : {col_range}_')
+            st.dataframe(df[df[col].isin(out_of_range[col])])
+        st.stop()
+
+    age_warn1, age_warn2 = st.columns([2, 0.5])
+    if age_flags:
+        age_warn1.warning(f'Warning: We have detected ages that are below 25 in the column(s) _{", ".join(list(age_flags.keys()))}_. \
+                    Please check that this is correct.')
+        if age_warn2.button('View Ages Below 25'):
+            for col in age_flags.keys():
+                st.markdown(f'* _{col}_')
+                st.dataframe(df[df[col].isin(age_flags[col])])
 
     # Make sure age_at_baseline is consistent for the same clinical IDs
     inconsistent_baseline = df.groupby('clinical_id')['age_at_baseline'].nunique()
@@ -294,8 +249,6 @@ if data_file is not None and study_name is not None:
     hy_qc_col1, hy_qc_col2, hy_qc_col3 = st.columns(3)
     hy_qc_count1, hy_qc_count2, hy_qc_count3 = st.columns(3)
 
-    st.write(st.session_state['btn'])
-
     if 'counter' not in st.session_state:
         hy_qc1.markdown('### HY-Specific Quality Control')
         st.session_state['counter'] = 0
@@ -319,8 +272,6 @@ if data_file is not None and study_name is not None:
                                                     on=['clinical_id',
                                                         'visit_month'],
                                                     how='outer'), st.session_state['data_chunks'])
-    st.write(st.session_state['btn'])
-
 
     if st.session_state['btn']:
 
@@ -345,17 +296,7 @@ if data_file is not None and study_name is not None:
             if view_dup:
                 st.markdown('_Duplicate Rows:_')
                 st.dataframe(dups, use_container_width=True)
-                st.markdown('_All duplicated rows will be merged, keeping the first unique entry._')
-
-        # Make sure either HY scale is in the range 0 <= y <= 5
-        df[get_varname] = pd.to_numeric(df[get_varname], errors='coerce')
-        var_range_check = df[(df[get_varname] > 5) | (df[get_varname] < 0)]
-        if var_range_check.shape[0] > 0:
-            st.error(
-                f'Please keep the {get_varname} value greater than or equal to 0 and less than or equal to 5.')
-            st.markdown(f'_Out-of-range {get_varname} Values:_')
-            st.dataframe(var_range_check, use_container_width=True)
-            st.stop()
+                st.info('All duplicated rows will be merged, keeping the first unique entry.')
 
         st.markdown('---------')
 
@@ -417,8 +358,6 @@ if data_file is not None and study_name is not None:
                 st.stop()
 
         plot2.button('Continue', key='continue_plot', on_click = hy.call_on, args = ['plot_val'])
-        st.write(st.session_state.plot_val)
-        st.write(st.session_state.btn)
             
         if st.session_state['plot_val']:
             plot_interactive_visit_month(
@@ -444,8 +383,7 @@ if data_file is not None and study_name is not None:
             df_sv = create_survival_df(
                 df_final, threshold, direction, get_varname, selected_strata)
             
-            # plot_km_curve(df_sv, selected_strata, threshold, direction) # old method
-            plot_km_curve_plotly(df_sv, selected_strata, threshold, direction) # new interactive method
+            plot_km_curve(df_sv, selected_strata, threshold, direction) # new interactive method
 
             st.markdown('---------')
             st.markdown('### Review Individual Samples')
@@ -531,33 +469,6 @@ if data_file is not None and study_name is not None:
                                                 studycode=study_name)
                 yes_col3.download_button("Download your Data", data=excel_file, file_name=filename,
                                             mime="application/vnd.ms-excel", use_container_width=True)
-
-                # Currently moving forward with email-only submission
-                # yes_col3.button("Submit Data to GP2's Google Bucket",
-                #                 use_container_width=True, on_click=upload_callback1)
-                # if st.session_state['upload_bucket']:
-                #     upload_form = st.empty()
-
-                #     # add form
-                #     with upload_form.form("upload_gp2"):
-                #         st.write("#### :red[Upload the following data?]")
-
-                #         st.markdown(f"__GOOGLE CLOUD PROJECT NAME:__ ")
-                #         st.markdown("__BUCKET DESTINATION:__ ")
-
-                #         # can add "change file name" option
-                #         st.markdown(f'__FILE:__ {study_name}_HY_qc.csv')
-                #         st.dataframe(df, use_container_width=True)
-
-                #         send1, send2, send3 = st.columns(3)
-                #         submitted = send2.form_submit_button(
-                #             "Upload", use_container_width=True)
-                #         if submitted:
-                #             # currently do not have Google Bucket info
-                #             upload_data(bucket_name, df,
-                #                         bucket_destination)
-                #             upload_form.empty()  # clear form from screen
-                #             st.success('Data uploaded, thank you!')
 
             if qc_yesno == 'NO':
                 st.error("Please change any unexpected values in your clinical data and reupload \
