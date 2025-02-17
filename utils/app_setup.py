@@ -21,6 +21,20 @@ class AppConfig():
         # Config page with logo in browser tab
         st.set_page_config(page_title=self.page_title, page_icon='data/gp2_2-removebg.png', layout="wide")
 
+    def config_data_upload(self, template_link):
+        instructions = st.expander("##### :red[Getting Started]", expanded=True)
+        with instructions:
+            st.markdown(
+                f'__①__ Please download [the data dictionary and template]({template_link}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
+            st.markdown(
+                '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
+            st.markdown('__③__ Select your GP2 Study Code.')
+        st.markdown('---------')
+
+        # Data Uploader
+        data_file = st.sidebar.file_uploader("Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
+        return data_file
+
     def google_connect(self):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = AppConfig.GOOGLE_APP_CREDS
 

@@ -21,18 +21,8 @@ hy.google_connect()
 # Page set-up
 st.markdown('## Hoehn and Yahr QC')
 
-instructions = st.expander("##### :red[Getting Started]", expanded=True)
-with instructions:
-    st.markdown(
-        f'__①__ Please download [the data dictionary and template]({HY.TEMPLATE_LINK}). Data dictionary can be found in the 2nd tab.', unsafe_allow_html=True)
-    st.markdown(
-        '__②__ Upload your clinical data consistent to the template & required fields in the left sidebar. If you recieve AxiosError 400, please re-upload until the issue resolves itself.')
-    st.markdown('__③__ Select your GP2 Study Code.')
-st.markdown('---------')
-
-# Data Uploader
-data_file = st.sidebar.file_uploader(
-    "Upload Your clinical data (CSV/XLSX)", type=['xlsx', 'csv'])
+# Uploader set-up
+data_file = hy.config_data_upload(hy.TEMPLATE_LINK)
 
 # Google Drive Master Key access
 if 'master_key' not in st.session_state:
