@@ -165,7 +165,7 @@ if data_file is not None and study_name is not None:
     else:
         cisi_qc1.markdown('### CISI-PD Quality Control')
         st.session_state['cisi_counter'] += 1
-        if len(st.session_state['variable']) >= 1:
+        if len(st.session_state['cisi_variable']) >= 1:
             cisi_version = cisi_qc_col1.selectbox(
                 "Choose an cisi version", st.session_state['cisi_variable'], on_change=cisi.call_off, args = ['cisi_btn'], label_visibility='collapsed')
             get_varname = cisi.OUTCOMES_DICT[cisi_version]
