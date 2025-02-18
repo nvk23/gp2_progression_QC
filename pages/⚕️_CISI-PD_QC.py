@@ -62,10 +62,10 @@ if data_file is not None and study_name is not None:
 
         # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
-        st.session_state.cisi_continue_merge = uploaded2.selectbox('Continue with:', options=[
+        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=[
                                                               '', 'Uploaded Values', 'Manifest Values'], on_change=cisi.call_off, args=['cisi_btn'])
 
-        if st.session_state.cisi_continue_merge == '':
+        if st.session_state.continue_merge == '':
             st.stop()
         else:
             df = manifest.adjust_data(no_diff = False)
