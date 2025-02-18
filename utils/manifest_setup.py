@@ -16,7 +16,7 @@ class ManifestConfig():
         dfg = dfg[dfg.study == study_name].copy()
 
         # Consistent columns across manifests - will need to update if changes
-        dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)
+        dfg.rename(columns={'age': 'age_at_baseline'}, inplace=True)        
         self.df = pd.merge(df, dfg[['GP2ID', 'clinical_id', 'GP2_phenotype', 'GP2_PHENO', 'diagnosis', 'age_at_baseline', 'age_of_onset',
                                     'age_at_diagnosis', 'study_arm', 'study_type']], on='clinical_id', how='left', suffixes=('_uploaded', '_manifest'))
 
@@ -40,18 +40,21 @@ class ManifestConfig():
     def compare_cols(self):
         manifest_cols, uploaded_cols = self._get_cols()
 
-        # Ensure the columns being compared are numeric - can replace with method in app class?
-        for col in set(manifest_cols + uploaded_cols):
-            self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+        manifest_num = [col for col in manifest_cols if pd.api.types.is_numeric_dtype(self.df[col])]
+        manifest_cat = [col for col in manifest_cols if not pd.api.types.is_numeric_dtype(self.df[col])]
+        
+        uploaded_num = [col for col in uploaded_cols if pd.api.types.is_numeric_dtype(self.df[col])]
+        uploaded_cat = [col for col in uploaded_cols if not pd.api.types.is_numeric_dtype(self.df[col])]
 
         # Compare the corresponding columns and only flag for > 1 difference
-        unequal_cols = [col for x, y in zip(manifest_cols, uploaded_cols) if not (abs(
+        unequal_num = [col for x, y in zip(manifest_num, uploaded_num) if not (abs(
             self.df[x] - self.df[y]) <= 1).all() for col in (x, y)]
-        return unequal_cols
+        unequal_cat = [col for x, y in zip(manifest_cat, uploaded_cat) if not (
+            self.df[x] == self.df[y]).all() for col in (x, y)]
+        return unequal_num, unequal_cat
 
-    def find_diff(self, unequal_cols):
-        # Store column names with numerical values only
-        diff_num_cols = unequal_cols.copy()
+    def find_diff(self, unequal_num, unequal_cat):
+        unequal_cols = list(unequal_num + unequal_cat)
 
         # Add ID columns for more complete dataset display
         if 'clinical_id_manifest' not in unequal_cols:
@@ -59,13 +62,23 @@ class ManifestConfig():
         if 'GP2ID_manifest' not in unequal_cols:
             unequal_cols.insert(1, 'GP2ID')
 
-        # Only display rows with unequal values (> 1)
-        unequal_df = self.df[unequal_cols]
-        diff_values = unequal_df.apply(lambda row: any(abs(
-            row[diff_num_cols[i]] - row[diff_num_cols[i + 1]]) > 1 for i in range(0, len(diff_num_cols), 2)), axis=1)
+        # Only include relevant columns for comparison
+        unequal_df = self.df[list(unequal_cols)]
+
+        # Find rows where numerical differences exceed 1
+        diff_num = unequal_df.apply(lambda row: any(
+            abs(row[unequal_num[i]] - row[unequal_num[i + 1]]) > 1 
+            for i in range(0, len(unequal_num), 2)
+        ), axis=1) if unequal_num else False
+        
+        # Find rows where categorical values differ
+        diff_cat = unequal_df.apply(lambda row: any(
+            row[unequal_cat[i]] != row[unequal_cat[i + 1]] 
+            for i in range(0, len(unequal_cat), 2)
+        ), axis=1) if unequal_cat else False
 
         # Display only rows where values differ
-        diff_rows = unequal_df[diff_values]
+        diff_rows = unequal_df[diff_num | diff_cat]
         diff_rows.drop_duplicates(inplace=True)
         return diff_rows
 

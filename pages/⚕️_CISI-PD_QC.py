@@ -7,20 +7,20 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from utils.plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.plotting import plot_baseline_scores, plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
 from utils.data_prep import checkNull, subsetData, checkDup, mark_removed_rows, check_chronological_order, check_consistent, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel
-from utils.app_setup import AppConfig, HY
+from utils.app_setup import AppConfig, CISI
 from utils.manifest_setup import ManifestConfig
 
 # Page set-up
-hy = HY('Hoehn & Yahr QC')
-hy.config_page()
-hy.config_HY()
-hy.google_connect()
+cisi = CISI('CISI-PD QC')
+cisi.config_page()
+cisi.config_CISI()
+cisi.google_connect()
 
 # Uploader set-up
-data_file = hy.config_data_upload(hy.TEMPLATE_LINK)
+data_file = cisi.config_data_upload(cisi.TEMPLATE_LINK)
 
 # Google Drive Master Key access
 if 'master_key' not in st.session_state:
@@ -33,13 +33,13 @@ if data_file is not None and study_name is not None:
     uploaded_df = read_file(data_file)
 
     # Make sure uploaded dataframe matches exact names to prep for merge
-    incorrect_cols, checked_cols = hy.missing_HY(uploaded_df)
-    missing_outcome, missing_req = hy.check_required(uploaded_df)
+    missing_outcome, missing_req = cisi.check_required(uploaded_df)
+    available_metrics = [item for item in cisi.OUTCOMES_DICT.values() if item not in set(missing_outcome)]
 
-    if len(incorrect_cols) > 0:
-        st.warning(f"Please correct the column(s) __{', '.join(incorrect_cols)}__ in your uploaded data to match the following template options: _{', '.join(checked_cols)}_ to ensure proper data QC.")
-    if len(missing_outcome) > 1:
-        st.error(f'Both Hoehn and Yahr Stage columns are missing: {missing_outcome}. \
+    if len(missing_outcome) > 0:
+        st.session_state['cisi_variable'] = [key for key, value in cisi.OUTCOMES_DICT.items() if value in available_metrics]
+    if len(missing_outcome) == len(cisi.OUTCOMES_DICT.values()):
+        st.error(f'All CISI-PD metric columns are missing: {missing_outcome}. \
                 Please use the template sheet to add at least one of these columns and re-upload.')
         st.stop()
     if len(missing_req) > 0:
@@ -49,7 +49,7 @@ if data_file is not None and study_name is not None:
     # Load GP2 Genotyping Data Master Key
     manifest = ManifestConfig(uploaded_df, study_name)
     unequal_num, unequal_cat = manifest.compare_cols()
-    unequal_cols = list(unequal_num + unequal_cat)
+    unequal_cols = set(unequal_num + unequal_cat)
 
     # Need to fix any discrepancies between manifest and uploaded file before continuing
     if len(unequal_cols) > 0:
@@ -62,10 +62,10 @@ if data_file is not None and study_name is not None:
 
         # User selection for which dataset to continue with when > 1 discrepancies
         uploaded1, uploaded2, uploaded3 = st.columns(3)
-        st.session_state.continue_merge = uploaded2.selectbox('Continue with:', options=[
-                                                              '', 'Uploaded Values', 'Manifest Values'], on_change=hy.call_off, args=['btn'])
+        st.session_state.cisi_continue_merge = uploaded2.selectbox('Continue with:', options=[
+                                                              '', 'Uploaded Values', 'Manifest Values'], on_change=cisi.call_off, args=['cisi_btn'])
 
-        if st.session_state.continue_merge == '':
+        if st.session_state.cisi_continue_merge == '':
             st.stop()
         else:
             df = manifest.adjust_data(no_diff = False)
@@ -102,63 +102,43 @@ if data_file is not None and study_name is not None:
         count3.metric(label="Total Observations", value=len(df))
 
     # Check for missing optional columns from template
-    missing_optional = hy.missing_optional(df)
     init_cols1, init_cols2 = st.columns([2, 0.5])
-    if len(missing_optional) > 0:
-        init_cols1.warning(f"Warning: The following optional columns are missing: _{', '.join(missing_optional)}_. \
+    if len(missing_outcome) > 0:
+        init_cols1.warning(f"Warning: The following optional columns are missing: _{', '.join(missing_outcome)}_. \
                 Please use the template sheet if you would like to add these values or initialize with null values.")
         add_nulls = init_cols2.button(
-            'Fill Columns with Null Values', on_click=hy.call_on, args = ['add_nulls'])
-        if st.session_state['add_nulls']:
-            hy.nullify(df, missing_optional)
+            'Fill Columns with Null Values', on_click=cisi.call_on, args = ['cisi_add_nulls'])
+        if st.session_state['cisi_add_nulls']:
+            cisi.nullify(df, missing_outcome)
         if add_nulls:
             st.markdown('_All Columns:_')
             st.dataframe(df, use_container_width=True)
 
-    # Regardless of user selection add "clinical_state_on_medication" column if don't exist already
-    hy.nullify(df, ['clinical_state_on_medication', 'dbs_status'])
-
-    # Create column that combines values from age of diagnosis first then age of onset
-    hy.add_age_outcome(df) 
-
     # Checking for NaN values in each column and summing them
-    df_nulls = hy.check_nulls(df)
+    df_nulls = cisi.check_nulls(df, available_metrics, df.columns)
     if len(df_nulls) > 0:
         st.error(
-            f'There are missing entries in the following required columns. Please fill in the missing cells.\
-            __Reminder that age_of_onset is only required if age_at_diagnosis is unavailable.__')
+            f'There are missing entries in the following required columns. Please fill in the missing cells.')
         st.markdown('_Missing Required Values:_')
 
-        # Display dataframe with rows only missing both age_at_diagnosis and age_of_onset
+        # Display dataframe with missing value rows
         st.dataframe(df_nulls, use_container_width=True)
         st.stop()
 
-    # Make sure the clnical_id - visit_month combination is unique (warning if not unique)
-    dup_cols = checkDup(df, ['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status'])
-    if len(dup_cols) > 0:
-        dup_warn1, dup_warn2 = st.columns([2, 0.5])
-        dup_warn1.warning(
-            f'Warning: We have detected samples with duplicated visit months, clinical state on medication, and DBS status.\
-            Please review data if this was unintended.')
-        if dup_warn2.button('View Duplicate Visits'):
-            st.markdown('_Duplicate Visits:_')
-            st.dataframe(dup_cols, use_container_width=True)
-
     # Make sure numeric columns are in proper ranges - flag 25 and below for age columns & 0 for visit_month
-    out_of_range = hy.check_ranges(df)
-    age_flags = hy.flag_ages(df, 25)
+    out_of_range = cisi.check_ranges(df)
 
     if out_of_range:
         st.error(f'We have detected values that are out of range in the column(s) _{", ".join(list(out_of_range.keys()))}_. \
                     Values in these columns should be numeric and between the following permitted ranges:')
         for col in out_of_range.keys():
-            col_range = HY.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, "Unknown Range"))
+            col_range = cisi.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, "Unknown Range"))
             st.markdown(f'* _{col} : {col_range}_')
             st.dataframe(df[df[col].isin(out_of_range[col])])
         st.stop()
 
     # Warn if sample does not have visit_month = 0
-    no_zero_month = hy.check_visit_months(df)
+    no_zero_month = cisi.check_visit_months(df)
     zero_warn1, zero_warn2 = st.columns([2, 0.5])
 
     if len(no_zero_month) > 0:
@@ -168,73 +148,28 @@ if data_file is not None and study_name is not None:
             st.markdown('_Samples Without Visit Month of 0:_')
             st.dataframe(no_zero_month, use_container_width=True)
 
-    # Warn if sample has age values < 25
-    age_warn1, age_warn2 = st.columns([2, 0.5])
-    if age_flags:
-        age_warn1.warning(f'Warning: We have detected ages that are below 25 in the column(s) _{", ".join(list(age_flags.keys()))}_. \
-                    Please check that this is correct.')
-        if age_warn2.button('View Ages Below 25'):
-            for col in age_flags.keys():
-                st.markdown(f'* _{col}_')
-                st.dataframe(df[df[col].isin(age_flags[col])])
-
-    # Make sure age cols are in chronological order unless Prodromal and non-PD Genetically Enriched
-    not_chrono = check_chronological_order(df)
-
-    if len(not_chrono) > 0:
-        st.error(f'We have detected ages that are not in chronological order in PD entries.\
-                The age values should be in the following increasing order: age_of_onset, age_at_diagnosis, age_at_baseline.')
-        st.dataframe(not_chrono, use_container_width=True)
-        st.stop()
-
-    # Make sure age_at_baseline is consistent for the same clinical IDs
-    diff_baseline = check_consistent(df, 'age_at_baseline')
-    diff_outcome = check_consistent(df, 'age_outcome')
-    
-    if len(diff_baseline) > 0:
-        st.error(
-                f'We have detected samples with inconsistent age_at_baseline values. Please correct this and re-upload.')
-        st.markdown(f'_Samples with inconsistent age_at_baseline values:_')
-        st.dataframe(diff_baseline, use_container_width=True)
-        st.stop()
-    elif len(diff_outcome) > 0:
-        st.error(
-                f'We have detected samples with inconsistent age_at_diagnosis or age_of_onset values. Please correct this and re-upload.')
-        st.markdown(f'_Samples with inconsistent age_at_diagnosis or age_of_onset values:_')
-        st.dataframe(diff_outcome, use_container_width=True)
-        st.stop()
-
-    # Check that clinical variables have correct values if they're in the data
-    invalid_med_vals = hy.check_med_vals(df)
-    if invalid_med_vals:
-        st.error(f'Please make sure the following columns have the following permitted values to continue.')
-        for col in invalid_med_vals.keys():
-            st.error(f'* {col}: {hy.MED_VALS[col]}')
-            st.dataframe(invalid_med_vals[col])
-        st.stop()
-
     st.success('Your clinical data has passed all required up-front checks!')
     st.markdown('---------')
 
-    hy_qc1, hy_qc2 = st.columns(2)
-    hy_qc_col1, hy_qc_col2, hy_qc_col3 = st.columns(3)
-    hy_qc_count1, hy_qc_count2, hy_qc_count3 = st.columns(3)
+    cisi_qc1, cisi_qc2 = st.columns(2)
+    cisi_qc_col1, cisi_qc_col2, cisi_qc_col3 = st.columns(3)
+    cisi_qc_count1, cisi_qc_count2, cisi_qc_count3 = st.columns(3)
 
-    if 'counter' not in st.session_state:
-        hy_qc1.markdown('### HY-Specific Quality Control')
-        st.session_state['counter'] = 0
-        hy_qc_col1.selectbox(
-            "Choose an HY version", st.session_state['variable'], label_visibility='collapsed')
-        b1 = hy_qc_col2.button("Continue", on_click=hy.call_off, args = ['btn'])
+    if 'cisi_counter' not in st.session_state:
+        cisi_qc1.markdown('### CISI-PD Quality Control')
+        st.session_state['cisi_counter'] = 0
+        cisi_qc_col1.selectbox(
+            "Choose a CISI-PD metric", st.session_state['cisi_variable'], label_visibility='collapsed')
+        b1 = cisi_qc_col2.button("Continue", on_click=cisi.call_off, args = ['cisi_btn'])
         get_varname = None
     else:
-        hy_qc1.markdown('### HY-Specific Quality Control')
-        st.session_state['counter'] += 1
+        cisi_qc1.markdown('### CISI-PD Quality Control')
+        st.session_state['cisi_counter'] += 1
         if len(st.session_state['variable']) >= 1:
-            hy_version = hy_qc_col1.selectbox(
-                "Choose an HY version", st.session_state['variable'], on_change=hy.call_off, args = ['btn'], label_visibility='collapsed')
-            get_varname = hy.OUTCOMES_DICT[hy_version]
-            hy_qc_col2.button("Continue", on_click = hy.call_on, args = ['btn'])
+            cisi_version = cisi_qc_col1.selectbox(
+                "Choose an cisi version", st.session_state['cisi_variable'], on_change=cisi.call_off, args = ['cisi_btn'], label_visibility='collapsed')
+            get_varname = cisi.OUTCOMES_DICT[cisi_version]
+            cisi_qc_col2.button("Continue", on_click = cisi.call_on, args = ['cisi_btn'])
         else:
             st.markdown(
                 '<p class="medium-font"> You have successfully QCed all clinical variables, thank you!</p>', unsafe_allow_html=True)
@@ -242,27 +177,26 @@ if data_file is not None and study_name is not None:
             final_df = reduce(lambda x, y: pd.merge(x, y,
                                                     on=['clinical_id',
                                                         'visit_month'],
-                                                    how='outer'), st.session_state['data_chunks'])
-
-    if st.session_state['btn']:
+                                                    how='outer'), st.session_state['cisi_data_chunks'])
+    if st.session_state['cisi_btn']:
 
         # reorder columns for display
-        df_subset = hy.reorder_cols(df)
+        df_subset = cisi.reorder_cols(df)
 
         nulls = checkNull(df_subset, get_varname)
-        hy_qc_count1.metric(label="Null Values", value=len(nulls))
+        cisi_qc_count1.metric(label="Null Values", value=len(nulls))
 
         dups = checkDup(df_subset, list(df_subset.columns), drop_dup = False)
-        hy_qc_count2.metric(label="Duplicate Rows", value=len(dups))
+        cisi_qc_count2.metric(label="Duplicate Rows", value=len(dups))
 
         # Add buttons to check null and duplicate samples
         if len(nulls) > 0:
-            view_null = hy_qc_count3.button('Review Null Values')
+            view_null = cisi_qc_count3.button('Review Null Values')
             if view_null:
                 st.markdown('_Null Values:_')
                 st.dataframe(nulls, use_container_width=True)
         if len(dups) > 0:
-            view_dup = hy_qc_count3.button('Review Duplicate Rows')
+            view_dup = cisi_qc_count3.button('Review Duplicate Rows')
             if view_dup:
                 st.markdown('_Duplicate Rows:_')
                 st.dataframe(dups, use_container_width=True)
@@ -293,12 +227,12 @@ if data_file is not None and study_name is not None:
                 df_subset, styled_duplicates = mark_removed_rows(df_final, df_subset, unequal_dup_rows)
                 st.dataframe(styled_duplicates)
 
-        # may need to move this higher to the initial QC before HY-specific QC
+        # may need to move this higher to the initial QC before cisi-specific QC
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
-        strata = plot1.selectbox("Select a stratifying variable to plot:", hy.STRAT_VALS.keys(
-        ), index=0, label_visibility='collapsed', on_change=hy.call_off, args=['plot_val'])
-        selected_strata = hy.STRAT_VALS[strata]
+        strata = plot1.selectbox("Select a stratifying variable to plot:", cisi.STRAT_VALS.keys(
+        ), index=0, label_visibility='collapsed', on_change=cisi.call_off, args=['cisi_plot_val'])
+        selected_strata = cisi.STRAT_VALS[strata]
 
         # Make sure selected stratifying variable is in the dataframe
         null_strata = checkNull(df_final, selected_strata)
@@ -311,45 +245,37 @@ if data_file is not None and study_name is not None:
                 'The selected stratifying variable only has null input values. Please select another variable to plot.')
             st.stop()
 
-        # Make sure stratifying selections include required values to continue
-        if selected_strata in hy.MED_VALS.keys():
-            if len(invalid_med_vals) > 0:
-                st.error(
-                    f'Please make sure {selected_strata} values are {hy.MED_VALS[selected_strata]} to continue.')
-                st.markdown(f'_Fix the following {selected_strata} values:_')
-                st.dataframe(invalid_med_vals[selected_strata], use_container_width=True)
-                st.stop()
-
-        plot2.button('Continue', key='continue_plot', on_click = hy.call_on, args = ['plot_val'])
+        plot2.button('Continue', key='continue_plot', on_click = cisi.call_on, args = ['cisi_plot_val'])
             
-        if st.session_state['plot_val']:
-            plot_interactive_visit_month(
-                df_final, get_varname, selected_strata)
+        if st.session_state['cisi_plot_val']:
+            # Cross-sectional bar plot at baseline
+            plot_baseline_scores(df_final, get_varname, cisi_version, selected_strata)
 
-            df_sv_temp = create_survival_df(
-                df_final, 3, 'greater', get_varname, selected_strata)
-            df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
 
-            plot_interactive_first_vs_last(df_sv_temp, selected_strata)
+            # plot_interactive_visit_month(
+            #     df_final, get_varname, selected_strata)
 
-            # using df_sv, event and censored_months, generate the show KM curve stratified by strata
-            # take a threshold input
+            # df_sv_temp = create_survival_df(
+            #     df_final, 3, 'greater', get_varname, selected_strata)
+            # df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
 
-            min_value = hy.NUMERIC_RANGES[get_varname][0]
-            max_value = hy.NUMERIC_RANGES[get_varname][1]
+            # plot_interactive_first_vs_last(df_sv_temp, selected_strata)
 
-            st.markdown(
-                '#### Kaplan-Meier Curve for Reaching the Threshold Score')
-            thresh1, thresh2, thresh3 = st.columns([1, 0.5, 1])
-            direction = thresh1.radio(label='Direction', horizontal=True, options=[
-                                        'Greater Than or Equal To', 'Less Than or Equal To'])
-            threshold = thresh2.number_input(
-                min_value=min_value, max_value=max_value, step=1, label='Threshold', value=3)
-            st.write('###')
-            df_sv = create_survival_df(
-                df_final, threshold, direction, get_varname, selected_strata)
+            # min_value = cisi.NUMERIC_RANGE[0]
+            # max_value = cisi.NUMERIC_RANGE[1]
+
+            # st.markdown(
+            #     '#### Kaplan-Meier Curve for Reaching the Threshold Score')
+            # thresh1, thresh2, thresh3 = st.columns([1, 0.5, 1])
+            # direction = thresh1.radio(label='Direction', horizontal=True, options=[
+            #                             'Greater Than or Equal To', 'Less Than or Equal To'])
+            # threshold = thresh2.number_input(
+            #     min_value=min_value, max_value=max_value, step=1, label='Threshold', value=3)
+            # st.write('###')
+            # df_sv = create_survival_df(
+            #     df_final, threshold, direction, get_varname, selected_strata)
             
-            plot_km_curve(df_sv, selected_strata, threshold, direction) # new interactive method
+            # plot_km_curve(df_sv, selected_strata, threshold, direction) # new interactive method
 
             st.markdown('---------')
             st.markdown('### Review Individual Samples')
@@ -372,20 +298,20 @@ if data_file is not None and study_name is not None:
 
             if qc_yesno == 'YES':
                 st.info('Thank you! Please review the following options:')
-                st.session_state['data_chunks'].append(df_final)
+                st.session_state['cisi_data_chunks'].append(df_final)
 
                 yes_col1, yes_col2, yes_col3 = st.columns(
                     3)  # add download button?
                 if yes_col1.button("QC another variable", use_container_width=True):
-                    # will not work until Modified HY Field is added
-                    st.session_state['variable'].remove(hy_version)
-                    hy.call_off('btn')
+                    # will not work until Modified cisi Field is added
+                    st.session_state['cisi_variable'].remove(cisi_version)
+                    cisi.call_off('cisi_btn')
 
                 yes_col2.button("Email Data to GP2 Clinical Data Coordinator",
-                                use_container_width=True, on_click=hy.call_on, args = ['send_email'])
+                                use_container_width=True, on_click=cisi.call_on, args = ['cisi_send_email'])
 
                 # necessary because of nested form/button
-                if st.session_state['send_email']:
+                if st.session_state['cisi_send_email']:
 
                     email_form = st.empty()
                     with email_form.container(border=True):
@@ -396,7 +322,7 @@ if data_file is not None and study_name is not None:
 
                         version = dt.datetime.today().strftime('%Y-%m-%d')
                         st.markdown(
-                            f'__ATTACHMENT:__ {version}_{study_name}_HY_qc.csv')
+                            f'__ATTACHMENT:__ {version}_{study_name}_cisi_qc.csv')
                         
                          # Submit full dataset with markers for rows removed in unequal duplicate removal
                         df_subset.sort_values(by=['GP2ID']).reset_index(drop = True, inplace = True)
@@ -420,9 +346,9 @@ if data_file is not None and study_name is not None:
                             submitted = send2.button(
                                 "Send", use_container_width=True, disabled=True)
                     if submitted:
-                        st.session_state.send_email = False
+                        st.session_state.cisi_send_email = False
                         send_email(study_name, 'send_data', contact_info={
-                            'name': submitter_name, 'email': submitter_email}, data=df_subset, modality='HY')
+                            'name': submitter_name, 'email': submitter_email}, data=df_subset, modality='cisi')
                         email_form.empty()  # clear form from screen
                         st.success('Email sent, thank you!')
 

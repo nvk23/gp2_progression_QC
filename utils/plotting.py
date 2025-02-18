@@ -129,3 +129,11 @@ def plot_interactive_visit_month(df, outcome, strata):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+def plot_baseline_scores(df, metric, metric_name, strata):
+    baseline_df = df[df.visit_month == 0]
+
+    fig = px.histogram(baseline_df, x=metric, color=strata, title=f"{metric_name} Scores per Sample")
+    fig.update_layout(xaxis_title=metric_name)
+
+    st.plotly_chart(fig, use_container_width=True)

@@ -20,6 +20,8 @@ class AppConfig():
     def config_page(self):
         # Config page with logo in browser tab
         st.set_page_config(page_title=self.page_title, page_icon='data/gp2_2-removebg.png', layout="wide")
+        if self.page_title != 'Home':
+            st.markdown(f'## {self.page_title}')
 
     def config_data_upload(self, template_link):
         instructions = st.expander("##### :red[Getting Started]", expanded=True)
@@ -55,6 +57,10 @@ class AppConfig():
     def nullify(self, df, cols):
         for col in cols:
             df[col] = None
+
+    def reorder_cols(self, df):
+        cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
+        return df[cols_order]
 
     def missing_required(self, df, extra_cols):
         missing_extra = np.setdiff1d(extra_cols, df.columns)
@@ -132,10 +138,6 @@ class HY(AppConfig):
     
     def add_age_outcome(self, df):
         df['age_outcome'] = df['age_at_diagnosis'].combine_first(df['age_of_onset'])
-
-    def reorder_cols(self, df):
-        cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
-        return df[cols_order]
     
     def check_required(self, df):
         return super().missing_required(df, list(HY.OUTCOMES_DICT.values()))
@@ -174,3 +176,34 @@ class HY(AppConfig):
                 if not invalid_entries.empty:
                     invalid_med_values[col] = invalid_entries.tolist()
         return invalid_med_values
+    
+class CISI(AppConfig):
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1WD-YPYHUfk5SwS2WDJHq-VG18a5a0JnNIFeainwvBbs/edit?gid=0#gid=0'
+    STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
+    OUTCOMES_DICT = {'CISI-PD Motor Signs': 'code_cisi_pd_motor',
+                    'CISI-PD Disability': 'code_cisi_pd_disability',
+                    'CISI-PD Motor Complications': 'code_cisi_pd_motor_complications',
+                    'CISI-PD Cognitive Status': 'code_cisi_pd_cognitive'}
+    SESSION_STATES = {'cisi_data_chunks': [], 'cisi_btn': False, 'cisi_plot_val': False, 'cisi_send_email': False, 'cisi_add_nulls': False,
+                      'cisi_variable': list(OUTCOMES_DICT.keys())}
+    NUMERIC_RANGE = [0, 6]
+    
+    def config_CISI(self):
+        super().config_variables(CISI.SESSION_STATES)
+    
+    def check_required(self, df):
+        return super().missing_required(df, list(CISI.OUTCOMES_DICT.values()))
+
+    def check_ranges(self, df):
+        out_of_range = super().check_ranges(df)
+
+        # If data type errors exist, return them instead of checking ranges
+        if 'Invalid Data Types' in out_of_range:
+            return out_of_range
+
+        for col in CISI.OUTCOMES_DICT.values():
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < CISI.NUMERIC_RANGE[0]) | (df[col] > CISI.NUMERIC_RANGE[1])][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+        return out_of_range
