@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 from functools import reduce
 
-from utils.plotting import plot_baseline_scores, plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last
+from utils.plotting import plot_baseline_scores, plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last, plot_duration_values
 from utils.data_prep import checkNull, subsetData, checkDup, mark_removed_rows, check_chronological_order, check_consistent, create_survival_df
 from utils.writeread import read_file, get_master, get_studycode, send_email, to_excel
 from utils.app_setup import AppConfig, CISI
@@ -248,34 +248,37 @@ if data_file is not None and study_name is not None:
         plot2.button('Continue', key='continue_plot', on_click = cisi.call_on, args = ['cisi_plot_val'])
             
         if st.session_state['cisi_plot_val']:
-            # Cross-sectional bar plot at baseline
-            plot_baseline_scores(df_final, get_varname, cisi_version, selected_strata)
 
+            # Check if only cross-sectional data
+            if (df_final.visit_month == 0).all():
+                # Cross-sectional bar plot at baseline
+                plot_baseline_scores(df_final, get_varname, cisi_version, selected_strata)
+                plot_duration_values(df_final, get_varname, cisi_version)
+            else:
+                plot_interactive_visit_month(
+                    df_final, get_varname, selected_strata)
 
-            # plot_interactive_visit_month(
-            #     df_final, get_varname, selected_strata)
+                df_sv_temp = create_survival_df(
+                    df_final, 3, 'greater', get_varname, selected_strata)
+                df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
 
-            # df_sv_temp = create_survival_df(
-            #     df_final, 3, 'greater', get_varname, selected_strata)
-            # df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
+                plot_interactive_first_vs_last(df_sv_temp, selected_strata)
 
-            # plot_interactive_first_vs_last(df_sv_temp, selected_strata)
+                min_value = cisi.NUMERIC_RANGE[0]
+                max_value = cisi.NUMERIC_RANGE[1]
 
-            # min_value = cisi.NUMERIC_RANGE[0]
-            # max_value = cisi.NUMERIC_RANGE[1]
-
-            # st.markdown(
-            #     '#### Kaplan-Meier Curve for Reaching the Threshold Score')
-            # thresh1, thresh2, thresh3 = st.columns([1, 0.5, 1])
-            # direction = thresh1.radio(label='Direction', horizontal=True, options=[
-            #                             'Greater Than or Equal To', 'Less Than or Equal To'])
-            # threshold = thresh2.number_input(
-            #     min_value=min_value, max_value=max_value, step=1, label='Threshold', value=3)
-            # st.write('###')
-            # df_sv = create_survival_df(
-            #     df_final, threshold, direction, get_varname, selected_strata)
-            
-            # plot_km_curve(df_sv, selected_strata, threshold, direction) # new interactive method
+                st.markdown(
+                    '#### Kaplan-Meier Curve for Reaching the Threshold Score')
+                thresh1, thresh2, thresh3 = st.columns([1, 0.5, 1])
+                direction = thresh1.radio(label='Direction', horizontal=True, options=[
+                                            'Greater Than or Equal To', 'Less Than or Equal To'])
+                threshold = thresh2.number_input(
+                    min_value=min_value, max_value=max_value, step=1, label='Threshold', value=3)
+                st.write('###')
+                df_sv = create_survival_df(
+                    df_final, threshold, direction, get_varname, selected_strata)
+                
+                plot_km_curve(df_sv, selected_strata, threshold, direction) # new interactive method
 
             st.markdown('---------')
             st.markdown('### Review Individual Samples')
