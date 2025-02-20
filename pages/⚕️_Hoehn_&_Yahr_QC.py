@@ -225,7 +225,7 @@ if data_file is not None and study_name is not None:
         st.session_state['counter'] = 0
         hy_qc_col1.selectbox(
             "Choose an HY version", st.session_state['variable'], label_visibility='collapsed')
-        b1 = hy_qc_col2.button("Continue", on_click=hy.call_off, args = ['btn'])
+        b1 = hy_qc_col2.button("Continue", on_click=hy.call_on, args = ['btn'])
         get_varname = None
     else:
         hy_qc1.markdown('### HY-Specific Quality Control')

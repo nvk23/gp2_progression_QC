@@ -137,7 +137,7 @@ def plot_baseline_scores(df, metric, metric_name, strata):
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_duration_values(df, metric, metric_name):
-    # Define bin edges (adjust if necessary)
+    # Define bin edges
     bin_edges = np.arange(0, df["disease_duration"].max() + 3, 3)
     bin_labels = [f"{int(b)}-{int(b+3)}" for b in bin_edges[:-1]]
 
@@ -154,7 +154,7 @@ def plot_duration_values(df, metric, metric_name):
     df_single = df[df["duration_bins"].isin(single_value_bins)]
     df_multi = df[df["duration_bins"].isin(multi_value_bins)]
 
-    # Create the violin plot for bins with multiple values
+    # Creates violin plots - turned off outlier points
     fig = px.violin(df_multi, x="duration_bins", y=metric, box=True, points=False,
                     title=f"{metric_name} Distribution Across Disease Duration Bins",
                     category_orders={"duration_bins": bin_labels})

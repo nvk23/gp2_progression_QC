@@ -160,7 +160,7 @@ if data_file is not None and study_name is not None:
         st.session_state['cisi_counter'] = 0
         cisi_qc_col1.selectbox(
             "Choose a CISI-PD metric", st.session_state['cisi_variable'], label_visibility='collapsed')
-        b1 = cisi_qc_col2.button("Continue", on_click=cisi.call_off, args = ['cisi_btn'])
+        b1 = cisi_qc_col2.button("Continue", on_click=cisi.call_on, args = ['cisi_btn'])
         get_varname = None
     else:
         cisi_qc1.markdown('### CISI-PD Quality Control')
