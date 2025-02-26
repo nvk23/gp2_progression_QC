@@ -6,8 +6,6 @@ import pandas as pd
 import streamlit as st
 from io import StringIO
 
-# from google.cloud import storage
-
 
 class ManifestConfig():
     def __init__(self, df, study_name):
@@ -107,4 +105,5 @@ class ManifestConfig():
                 rename_cols = dict(zip(manifest_cols, rename_manifest))
                 self.df.rename(columns=rename_cols, inplace=True)
                 self.df.drop(columns=uploaded_cols, inplace=True)
-            return self.df
+    
+        return self.df

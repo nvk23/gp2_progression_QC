@@ -6,16 +6,20 @@ import pandas as pd
 import streamlit as st
 from io import StringIO
 
-# from google.cloud import storage
 
 class AppConfig():
     # Necessary paths and variables for each page
     GOOGLE_APP_CREDS = "secrets/secrets.json"
     REQUIRED_COLS = ['clinical_id', 'visit_month']
-    NUMERIC_RANGES = {'visit_month': [-1200, 1200]}
+    AGE_COLS = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis']
+    NUMERIC_RANGES = {'visit_month': [-1200, 1200], 'age_at_baseline': [0, 125], 'age_of_onset': [0, 120], 'age_at_diagnosis': [0, 120]}
 
-    def __init__(self, page_title):
+    def __init__(self, page_title, page_name):
         self.page_title = page_title
+        self.page_name = page_name
+
+    def get_name(self):
+        return self.page_name
 
     def config_page(self):
         # Config page with logo in browser tab
@@ -58,11 +62,25 @@ class AppConfig():
         for col in cols:
             df[col] = None
 
+    def add_age_outcome(self, df):
+        df['age_outcome'] = df['age_at_diagnosis'].combine_first(df['age_of_onset'])
+        return df
+
+    def flag_ages(self, df, age):
+        flagged_vals = {}
+        
+        for col in self.AGE_COLS:
+            flag_ages = df[df[col] < age][col]
+            if not flag_ages.empty:
+                flagged_vals[col] = flag_ages.tolist()
+        return flagged_vals
+
     def reorder_cols(self, df):
         cols_order = ['GP2ID'] + [col for col in df.columns if col != 'GP2ID']
         return df[cols_order]
 
     def missing_required(self, df, extra_cols):
+        AppConfig.REQUIRED_COLS.extend(AppConfig.AGE_COLS)
         missing_extra = np.setdiff1d(extra_cols, df.columns)
         missing_req = np.setdiff1d(AppConfig.REQUIRED_COLS, df.columns)
         return missing_extra, missing_req
@@ -115,11 +133,9 @@ class HY(AppConfig):
                 'Medication for PD': 'medication_for_pd', 'DBS Stimulation': 'dbs_status'}
     OUTCOMES_DICT = {'Original HY Scale': 'hoehn_and_yahr_stage',
                     'Modified HY Scale': 'modified_hoehn_and_yahr_stage'}
-    SESSION_STATES = {'data_chunks': [], 'btn': False, 'plot_val': False, 'send_email': False, 'add_nulls': False,
-                      'variable': list(OUTCOMES_DICT.keys()), 'continue_merge': ''}
-    AGE_COLS = ['age_at_baseline', 'age_of_onset', 'age_at_diagnosis'] # see if you can combine with required_cols
-    NUMERIC_RANGES = {'ledd_daily': [0, 10000], 'age_at_baseline': [0, 125], 'age_of_onset': [0, 120], 'age_at_diagnosis': [0, 120],
-                      'hoehn_and_yahr_stage': [0, 5], 'modified_hoehn_and_yahr_stage': [0, 5]}
+    SESSION_STATES = {'hy_data_chunks': [], 'hy_btn': False, 'hy_plot_val': False, 'hy_send_email': False, 'hy_add_nulls': False,
+                      'hy_variable': list(OUTCOMES_DICT.keys()), 'hy_continue_merge': ''}
+    NUMERIC_RANGES = {'ledd_daily': [0, 10000], 'hoehn_and_yahr_stage': [0, 5], 'modified_hoehn_and_yahr_stage': [0, 5]}
     
     def config_HY(self):
         super().config_variables(HY.SESSION_STATES)
@@ -127,7 +143,7 @@ class HY(AppConfig):
     def missing_HY(self, df):
         hy_all  = list(HY.OUTCOMES_DICT.values())
         hy_all.extend(list(AppConfig.REQUIRED_COLS))
-        hy_all.extend(HY.AGE_COLS)
+        hy_all.extend(AppConfig.AGE_COLS)
         hy_all.extend(HY.OPTIONAL_COLS)
         no_req = np.setdiff1d(df.columns, hy_all)
         return no_req, hy_all
@@ -136,14 +152,11 @@ class HY(AppConfig):
         missing_optional, missing_req = super().missing_required(df, HY.OPTIONAL_COLS)
         return missing_optional
     
-    def add_age_outcome(self, df):
-        df['age_outcome'] = df['age_at_diagnosis'].combine_first(df['age_of_onset'])
-    
     def check_required(self, df):
         return super().missing_required(df, list(HY.OUTCOMES_DICT.values()))
     
-    def check_nulls(self, df):
-        return super().check_nulls(df, ['age_at_baseline', 'age_outcome'], HY.AGE_COLS)
+    # def check_nulls(self, df):
+    #     return super().check_nulls(df, ['age_at_baseline', 'age_outcome'], HY.AGE_COLS)
 
     def check_ranges(self, df):
         out_of_range = super().check_ranges(df)
@@ -158,15 +171,6 @@ class HY(AppConfig):
                 if not invalid_values.empty:
                     out_of_range[col] = invalid_values.tolist()
         return out_of_range
-    
-    def flag_ages(self, df, age):
-        flagged_vals = {}
-        
-        for col in self.AGE_COLS:
-            flag_ages = df[df[col] < age][col]
-            if not flag_ages.empty:
-                flagged_vals[col] = flag_ages.tolist()
-        return flagged_vals
     
     def check_med_vals(self, df):
         invalid_med_values = {}
@@ -207,3 +211,50 @@ class CISI(AppConfig):
                 if not invalid_values.empty:
                     out_of_range[col] = invalid_values.tolist()
         return out_of_range
+    
+# class MDS_UPDRS_PT1(AppConfig):
+#     TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1sRpbvlmHB0rtBMIuGW6YI7st3eWK-XvXPBe149pY4v8/edit?gid=869233872#gid=869233872'
+#     STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
+#     OUTCOMES_DICT = {'code_upd2101_cognitive_impairment',
+#                     'code_upd2102_hallucinations_and_psychosis',
+#                     'code_upd2103_depressed_mood',
+#                     'code_upd2104_anxious_mood',
+#                     'code_upd2105_apathy',
+#                     'code_upd2106_dopamine_dysregulation_syndrome_features',
+#                     'mds_updrs_part_i_sub_score',
+#                     'mds_updrs_part_i_pat_quest_primary_info_source',
+#                     'code_upd2107_pat_quest_sleep_problems',
+#                     'code_upd2108_pat_quest_daytime_sleepiness',
+#                     'code_upd2109_pat_quest_pain_and_other_sensations',
+#                     'code_upd2110_pat_quest_urinary_problems',
+#                     'code_upd2111_pat_quest_constipation_problems',
+#                     'code_upd2112_pat_quest_lightheadedness_on_standing',
+#                     'code_upd2113_pat_quest_fatigue',
+#                     'mds_updrs_part_i_pat_quest_sub_score',
+#                     'mds_updrs_part_i_summary_score'}
+#     SESSION_STATES = {'pt1_data_chunks': [], 'pt1_btn': False, 'pt1_plot_val': False, 'pt1_send_email': False, 'pt1_add_nulls': False,
+#                       'pt1_variable': list(OUTCOMES_DICT.keys())}
+#     NUMERIC_RANGE = [0, 4]
+    
+#     def config_MDS_UPDRS_PT1(self):
+#         super().config_variables(MDS_UPDRS_PT1.SESSION_STATES)
+    
+#     def check_required(self, df):
+#         return super().missing_required(df, list(MDS_UPDRS_PT1.OUTCOMES_DICT.values()))
+
+#     def check_ranges(self, df):
+#         out_of_range = super().check_ranges(df)
+
+#         # If data type errors exist, return them instead of checking ranges
+#         if 'Invalid Data Types' in out_of_range:
+#             return out_of_range
+
+#         for col in MDS_UPDRS_PT1.OUTCOMES_DICT.values():
+#             if col in df.columns: # not all columns are required
+#                 invalid_values = df[(df[col] < MDS_UPDRS_PT1.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT1.NUMERIC_RANGE[1])][col]
+#                 if not invalid_values.empty:
+#                     out_of_range[col] = invalid_values.tolist()
+#         return out_of_range
+    
+#     # make sub-score calculation method - if check each indiv score range subscore and summary scores will be in proper range
+#     # primary source of info string value? - drop down method?

@@ -10,12 +10,12 @@ import plotly.express as px
 import plotly.io as pio
 import seaborn as sns
 import datetime
-# from google.cloud import storage
+
 
 sys.path.append('utils')
 from utils.app_setup import AppConfig, HY
 
-app = AppConfig('Home')
+app = AppConfig('Home', 'home')
 app.config_page()
 
 # Main title
