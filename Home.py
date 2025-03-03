@@ -30,23 +30,23 @@ sent2.markdown("<h5 style='text-align: center; '>Please select a page marked wit
 sent2.markdown("<h6 style='text-align: center; '>If an image or video does not load in the tabs below, please refresh the page.</h6>", unsafe_allow_html=True)
 
 # Display expander with full project description
-overview = exp2.expander("Available Metrics", expanded=False)
-with overview:
-    st.markdown('''
-            <style>
-            [data-testid="stMarkdownContainer"] ul{
-                padding-left:40px;
-            }
-            </style>
-            ''', unsafe_allow_html=True)
+# overview = exp2.expander("Available Metrics", expanded=False)
+# with overview:
+#     st.markdown('''
+#             <style>
+#             [data-testid="stMarkdownContainer"] ul{
+#                 padding-left:40px;
+#             }
+#             </style>
+#             ''', unsafe_allow_html=True)
 
-    st.markdown("### _Hoehn and Yahr_")
-    st.markdown('Hoehn and Yahr staging scale (HY scale) is one of the most widely accepted clinical staging \
-                in Parkinson’s disease (PD) being used for about 50 years. The original version was a five-point scale \
-                while the modified version later added 1.5 and 2.5. The comparison of the original vs modified versions is \
-                shown in the following table:')
-    st.image(
-        'data/original_vs_modified_HY.png')
+#     st.markdown("### _Hoehn and Yahr_")
+#     st.markdown('Hoehn and Yahr staging scale (HY scale) is one of the most widely accepted clinical staging \
+#                 in Parkinson’s disease (PD) being used for about 50 years. The original version was a five-point scale \
+#                 while the modified version later added 1.5 and 2.5. The comparison of the original vs modified versions is \
+#                 shown in the following table:')
+#     st.image(
+#         'data/original_vs_modified_HY.png')
     
 instructions = exp2.expander("Instructional Video", expanded=False)
 with instructions:
