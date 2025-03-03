@@ -9,7 +9,7 @@ from functools import reduce
 
 from plotting import plot_km_curve, plot_interactive_visit_month, plot_interactive_first_vs_last, plot_baseline_scores, plot_duration_values
 from data_prep import checkNull, subsetData, checkDup, mark_removed_rows, check_chronological_order, check_consistent, create_survival_df
-from writeread import send_email, to_excel
+from writeread import send_email, create_excel
 from app_setup import AppConfig
 
 def prep_merge(page, uploaded_df):
@@ -331,7 +331,7 @@ def review_sample(page, df_final):
             st.markdown('###### _Hover over the dataframe and search for values using the 🔎 in the top right._')
             st.dataframe(single_sample, use_container_width=True)
 
-def qc_submit(page, df_final, df_subset, out_version, study_name):
+def qc_submit(page, df_final, df_subset, study_name):
     if st.session_state[f'{page.get_name()}_plot_val']:
         st.markdown('---------')
         st.markdown('### Data Submission')
@@ -360,7 +360,7 @@ def qc_submit(page, df_final, df_subset, out_version, study_name):
 
                     version = dt.datetime.today().strftime('%Y-%m-%d')
                     st.markdown(
-                        f'__ATTACHMENT:__ {version}_{study_name}_{page.get_name()}_qc.csv')
+                        f'__ATTACHMENT:__ {version}_{study_name}_{page.get_name().upper()}_qc.csv')
                     
                         # Submit full dataset with markers for rows removed in unequal duplicate removal
                     df_subset.sort_values(by=['GP2ID']).reset_index(drop = True, inplace = True)
@@ -386,12 +386,13 @@ def qc_submit(page, df_final, df_subset, out_version, study_name):
                 if submitted:
                     st.session_state[f'{page.get_name()}_send_email'] = False
                     send_email(study_name, 'send_data', contact_info={
-                        'name': submitter_name, 'email': submitter_email}, data=df_subset, modality=f'{page.get_name()}')
+                        'name': submitter_name, 'email': submitter_email}, data=df_subset, modality=f'{page.get_name().upper()}')
                     email_form.empty()  # clear form from screen
                     st.success('Email sent, thank you!')
 
-            excel_file, filename = to_excel(df=df_subset,
-                                            studycode=study_name)
+            excel_file, filename = create_excel(df=df_subset,
+                                            studycode=study_name,
+                                            metric=page.get_name().upper())
             yes_col2.download_button("Download your Data", data=excel_file, file_name=filename,
                                         mime="application/vnd.ms-excel", use_container_width=True)
 

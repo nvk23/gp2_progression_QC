@@ -153,4 +153,4 @@ if data_file is not None and study_name is not None:
             
         plot_outcomes(hy, df_final, get_varname, hy_version, selected_strata)
         review_sample(hy, df_final)
-        qc_submit(hy, df_final, df_subset, hy_version, study_name)
+        qc_submit(hy, df_final, df_subset, study_name)

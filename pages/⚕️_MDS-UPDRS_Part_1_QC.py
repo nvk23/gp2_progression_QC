@@ -133,4 +133,4 @@ if data_file is not None and study_name is not None:
         plot2.button('Continue', key='continue_plot', on_click = mds_updrs_pt1.call_on, args = ['mds_updrs_pt1_plot_val'])
         plot_outcomes(mds_updrs_pt1, df_final, get_varname, mds_updrs_pt1_version, selected_strata)
         review_sample(mds_updrs_pt1, df_final)
-        qc_submit(mds_updrs_pt1, df_final, df_subset, mds_updrs_pt1_version, study_name)
+        qc_submit(mds_updrs_pt1, df_final, df_subset, study_name)

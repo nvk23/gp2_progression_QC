@@ -76,11 +76,11 @@ def read_file(data_file):
     return (df)
 
 
-def to_excel(df, studycode):
+def create_excel(df, studycode, metric):
     version = dt.datetime.today().strftime('%Y-%m-%d')
     ext = "xlsx"
 
-    filename = f"{version}_{studycode}_HY_qc.{ext}"
+    filename = f"{version}_{studycode}_{metric}_qc.{ext}"
 
     output = io.BytesIO()
 
@@ -93,6 +93,7 @@ def to_excel(df, studycode):
 
 
 def send_email(studycode, activity, contact_info, data=None, modality='Clinical'):
+    modality = modality.replace('_', ' ')
     if activity == 'send_data':
         subject = f'{studycode} has Attached QCed {modality} Data'
         body = f'Hey team,\n\n{contact_info["name"]} has finished QCing their {studycode} {modality} Data for our Progression Project. You can contact them at {contact_info["email"]}. See attachment below.'

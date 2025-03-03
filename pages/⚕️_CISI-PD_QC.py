@@ -15,7 +15,7 @@ from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_outc
                             check_strata, plot_outcomes, review_sample, qc_submit)
 
 # Page set-up
-cisi = CISI('CISI-PD QC', 'cisi')
+cisi = CISI('CISI-PD QC', 'cisi_pd')
 cisi.config_page()
 cisi.config_CISI()
 cisi.google_connect()
@@ -76,21 +76,21 @@ if data_file is not None and study_name is not None:
     qc_col1, qc_col2, qc_col3 = st.columns(3)
     qc_count1, qc_count2, qc_count3 = st.columns(3)
 
-    if 'cisi_counter' not in st.session_state:
+    if 'cisi_pd_counter' not in st.session_state:
         qc1.markdown('### CISI-PD Quality Control')
-        st.session_state['cisi_counter'] = 0
+        st.session_state['cisi_pd_counter'] = 0
         qc_col1.selectbox(
-            "Choose a CISI-PD metric", st.session_state['cisi_variable'], label_visibility='collapsed')
-        qc_col2.button("Continue", on_click=cisi.call_on, args = ['cisi_btn'])
+            "Choose a CISI-PD metric", st.session_state['cisi_pd_variable'], label_visibility='collapsed')
+        qc_col2.button("Continue", on_click=cisi.call_on, args = ['cisi_pd_btn'])
         get_varname = None
     else:
         qc1.markdown('### CISI-PD Quality Control')
-        st.session_state['cisi_counter'] += 1
-        if len(st.session_state['cisi_variable']) >= 1:
+        st.session_state['cisi_pd_counter'] += 1
+        if len(st.session_state['cisi_pd_variable']) >= 1:
             cisi_version = qc_col1.selectbox(
-                "Choose an cisi version", st.session_state['cisi_variable'], on_change=cisi.call_off, args = ['cisi_btn'], label_visibility='collapsed')
+                "Choose an cisi version", st.session_state['cisi_pd_variable'], on_change=cisi.call_off, args = ['cisi_pd_btn'], label_visibility='collapsed')
             get_varname = cisi.OUTCOMES_DICT[cisi_version]
-            qc_col2.button("Continue", on_click = cisi.call_on, args = ['cisi_btn'])
+            qc_col2.button("Continue", on_click = cisi.call_on, args = ['cisi_pd_btn'])
         else:
             st.markdown(
                 '<p class="medium-font"> You have successfully QCed all clinical variables, thank you!</p>', unsafe_allow_html=True)
@@ -98,9 +98,9 @@ if data_file is not None and study_name is not None:
             final_df = reduce(lambda x, y: pd.merge(x, y,
                                                     on=['clinical_id',
                                                         'visit_month'],
-                                                    how='outer'), st.session_state['cisi_data_chunks'])
+                                                    how='outer'), st.session_state['cisi_pd_data_chunks'])
 
-    if st.session_state['cisi_btn']:
+    if st.session_state['cisi_pd_btn']:
 
         # reorder columns for display
         df_subset = cisi.reorder_cols(df)
@@ -118,13 +118,13 @@ if data_file is not None and study_name is not None:
         st.markdown('Select a stratifying variable to plot:')
         plot1, plot2, plot3 = st.columns(3)
         strata = plot1.selectbox("Select a stratifying variable to plot:", cisi.STRAT_VALS.keys(
-        ), index=0, label_visibility='collapsed', on_change=cisi.call_off, args=['cisi_plot_val'])
+        ), index=0, label_visibility='collapsed', on_change=cisi.call_off, args=['cisi_pd_plot_val'])
         selected_strata = cisi.STRAT_VALS[strata]
 
         # Make sure selected stratifying variable is in the dataframe
         check_strata(df_final, selected_strata)
 
-        plot2.button('Continue', key='continue_plot', on_click = cisi.call_on, args = ['cisi_plot_val'])
+        plot2.button('Continue', key='continue_plot', on_click = cisi.call_on, args = ['cisi_pd_plot_val'])
         plot_outcomes(cisi, df_final, get_varname, cisi_version, selected_strata)
         review_sample(cisi, df_final)
-        qc_submit(cisi, df_final, df_subset, cisi_version, study_name)
+        qc_submit(cisi, df_final, df_subset, study_name)
