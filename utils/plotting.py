@@ -136,7 +136,7 @@ def plot_baseline_scores(df, metric, metric_name, strata):
 
     st.plotly_chart(fig, use_container_width=True)
 
-def plot_duration_values(df, metric, metric_name):
+def plot_duration_values(df, metric, metric_name, min_outcome, max_outcome):
     # Define bin edges
     bin_edges = np.arange(0, df["disease_duration"].max() + 3, 3)
     bin_labels = [f"{int(b)}-{int(b+3)}" for b in bin_edges[:-1]]
@@ -165,5 +165,6 @@ def plot_duration_values(df, metric, metric_name):
     # Update axes labels
     fig.update_xaxes(title_text="Disease Duration (Years)")
     fig.update_yaxes(title_text=metric_name)
+    fig.update_layout(yaxis=dict(range=[min_outcome, max_outcome], showgrid=True))
 
     st.plotly_chart(fig, use_container_width=True)

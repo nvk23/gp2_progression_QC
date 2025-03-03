@@ -80,29 +80,49 @@ def gp2_ids(manifest, study_name):
         if view_missing_ids:
             st.markdown('_Non-GP2 Clinical IDs:_')
             st.dataframe(non_gp2, use_container_width=True)
+
     else:
         # All IDs are in GP2
         count1.metric(label="Unique Clinical IDs", value=all_ids)
         count2.metric(label="GP2 IDs Found", value=all_ids)
         count3.metric(label="Total Observations", value=len(df))
 
-def optional_cols(page, missing_outcome, df):
+    return df
+
+def optional_outcomes(page, missing_outcome, df):
     # Check for missing optional columns from template
     init_cols1, init_cols2 = st.columns([2, 0.5])
     if len(missing_outcome) > 0:
-        init_cols1.warning(f"Warning: The following optional columns are missing: _{', '.join(missing_outcome)}_. \
+        init_cols1.warning(f"Warning: The following outcome columns are missing: _{', '.join(missing_outcome)}_. \
                 Please use the template sheet if you would like to add these values or initialize with null values.")
         add_nulls = init_cols2.button(
-            'Fill Columns with Null Values', on_click=page.call_on, args = [f'{page.get_name()}_add_nulls'])
+            'Fill Columns with Null Values', on_click=page.call_on, args = [f'{page.get_name()}_add_nulls'], key = 'opt_outs')
         if st.session_state[f'{page.get_name()}_add_nulls']:
             page.nullify(df, missing_outcome)
         if add_nulls:
             st.markdown('_All Columns:_')
             st.dataframe(df, use_container_width=True)
 
+def optional_cols(page, df):
+    opt_cols1, opt_cols2 = st.columns([2, 0.5])
+    missing_optional = page.missing_optional(df)
+    if len(missing_optional) > 0:
+        opt_cols1.warning(f"Warning: The following optional columns are missing: _{', '.join(missing_optional)}_. \
+                Please use the template sheet if you would like to add these values or initialize with null values.")
+        add_opts = opt_cols2.button(
+            'Fill Columns with Null Values', on_click=page.call_on, args = [f'{page.get_name()}_add_opts'], key = 'opt_cols')
+        if st.session_state[f'{page.get_name()}_add_opts']:
+            page.nullify(df, missing_optional)
+        if add_opts:
+            st.markdown('_All Columns:_')
+            st.dataframe(df, use_container_width=True)
+
+
 def null_vals(page, available_metrics, df):
     # Checking for NaN values in each column and summing them
-    df_nulls = page.check_nulls(df, available_metrics, df.columns)
+    available_metrics.append('age_outcome')
+    df_nulls = page.check_nulls(df, available_metrics)
+
     if len(df_nulls) > 0:
         st.error(
             f'There are missing entries in the following required columns. Please fill in the missing cells.')
@@ -194,7 +214,7 @@ def med_val_strata(page, invalid_med_vals, strata):
 
 def visit_month_zero(page, df):
     # Warn if sample does not have visit_month = 0
-    no_zero_month = page.check_visit_months(df)
+    int_visits, no_zero_month = page.check_visit_months(df)
     zero_warn1, zero_warn2 = st.columns([2, 0.5])
 
     if len(no_zero_month) > 0:
@@ -203,6 +223,7 @@ def visit_month_zero(page, df):
         if zero_warn2.button('View Samples'):
             st.markdown('_Samples Without Visit Month of 0:_')
             st.dataframe(no_zero_month, use_container_width=True)
+    return int_visits
 
 def outcome_qc(df_subset, varname, qc_count1, qc_count2, qc_count3):
     nulls = checkNull(df_subset, varname)
@@ -260,12 +281,19 @@ def check_strata(df_final, selected_strata):
         st.stop()
 
 def plot_outcomes(page, df_final, varname, out_version, strata):
+    if page.get_name() in ['hy']:
+        min_value = page.NUMERIC_RANGES[varname][0]
+        max_value = page.NUMERIC_RANGES[varname][1]
+    else:
+        min_value = page.NUMERIC_RANGE[0]
+        max_value = page.NUMERIC_RANGE[1]
+
     if st.session_state[f'{page.get_name()}_plot_val']:
         # Check if only cross-sectional data
         if (df_final.visit_month == 0).all():
             # Cross-sectional bar plot at baseline
             plot_baseline_scores(df_final, varname, out_version, strata)
-            plot_duration_values(df_final, varname, out_version)
+            plot_duration_values(df_final, varname, out_version, min_value, max_value)
         else:
             plot_interactive_visit_month(
                 df_final, varname, strata)
@@ -275,13 +303,6 @@ def plot_outcomes(page, df_final, varname, out_version, strata):
             df_sv_temp = df_sv_temp.drop(columns=['event', 'censored_month'])
 
             plot_interactive_first_vs_last(df_sv_temp, strata)
-
-            if page.get_name() in ['cisi']:
-                min_value = page.NUMERIC_RANGE[0]
-                max_value = page.NUMERIC_RANGE[1]
-            else:
-                min_value = page.NUMERIC_RANGES[varname][0]
-                max_value = page.NUMERIC_RANGES[varname][1]
 
             st.markdown(
                 '#### Kaplan-Meier Curve for Reaching the Threshold Score')
@@ -322,13 +343,9 @@ def qc_submit(page, df_final, df_subset, out_version, study_name):
             st.info('Thank you! Please review the following options:')
             st.session_state[f'{page.get_name()}_data_chunks'].append(df_final)
 
-            yes_col1, yes_col2, yes_col3 = st.columns(
-                3)  # add download button?
-            if yes_col1.button("QC another variable", use_container_width=True):
-                st.session_state[f'{page.get_name()}_variable'].remove(out_version)
-                page.call_off(f'{page.get_name()}_btn')
+            yes_col1, yes_col2 = st.columns(2)
 
-            yes_col2.button("Email Data to GP2 Clinical Data Coordinator",
+            yes_col1.button("Email Data to GP2 Clinical Data Coordinator",
                             use_container_width=True, on_click=page.call_on, args = [f'{page.get_name()}_send_email'])
 
             # necessary because of nested form/button
@@ -375,7 +392,7 @@ def qc_submit(page, df_final, df_subset, out_version, study_name):
 
             excel_file, filename = to_excel(df=df_subset,
                                             studycode=study_name)
-            yes_col3.download_button("Download your Data", data=excel_file, file_name=filename,
+            yes_col2.download_button("Download your Data", data=excel_file, file_name=filename,
                                         mime="application/vnd.ms-excel", use_container_width=True)
 
         if qc_yesno == 'NO':

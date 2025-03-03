@@ -10,9 +10,9 @@ from functools import reduce
 from utils.writeread import read_file, get_master, get_studycode
 from utils.app_setup import HY
 from utils.manifest_setup import ManifestConfig
-from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_cols, null_vals, numeric_ranges, dup_med_vals, flag_ages,
-                            chronological_ages, age_consistency, med_values, visit_month_zero, outcome_qc, cleaned_df,
-                            med_val_strata, check_strata, plot_outcomes, review_sample, qc_submit)
+from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_outcomes, optional_cols, null_vals, numeric_ranges,
+                            dup_med_vals, flag_ages, chronological_ages, age_consistency, med_values, visit_month_zero, outcome_qc,
+                            cleaned_df, med_val_strata, check_strata, plot_outcomes, review_sample, qc_submit)
 
 # Page set-up
 hy = HY('Hoehn & Yahr QC', 'hy')
@@ -45,12 +45,15 @@ if data_file is not None and study_name is not None:
     df = compare_manifest(hy, manifest)
 
     # Check counts and GP2IDs
-    gp2_ids(manifest, study_name)
+    df = gp2_ids(manifest, study_name)
 
-    # Check for missing optional columns from template
-    optional_cols(hy, missing_outcome, df)
+    # Check for missing optional outcome columns from template
+    optional_outcomes(hy, missing_outcome, df)
 
-    # Regardless of user selection add "clinical_state_on_medication" column if don't exist already
+    # Check for missing optional outcome columns from template
+    optional_cols(hy, df)
+
+    # Add "clinical_state_on_medication" column if don't exist already
     hy.nullify(df, ['clinical_state_on_medication', 'dbs_status'])
 
     # Create column that combines values from age of diagnosis first then age of onset
@@ -66,7 +69,7 @@ if data_file is not None and study_name is not None:
     numeric_ranges(hy, df)
 
     # Warn if sample does not have visit_month = 0
-    visit_month_zero(hy, df)
+    df = visit_month_zero(hy, df)
 
     # Warn if sample has age values < 25
     flag_ages(hy, df)

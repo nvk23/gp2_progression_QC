@@ -10,7 +10,7 @@ from functools import reduce
 from utils.writeread import read_file, get_master, get_studycode
 from utils.app_setup import CISI
 from utils.manifest_setup import ManifestConfig
-from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_cols, null_vals, numeric_ranges, flag_ages,
+from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_outcomes, null_vals, numeric_ranges, flag_ages,
                             chronological_ages, age_consistency, visit_month_zero, outcome_qc, cleaned_df,
                             check_strata, plot_outcomes, review_sample, qc_submit)
 
@@ -43,10 +43,10 @@ if data_file is not None and study_name is not None:
     df = compare_manifest(cisi, manifest)
     
     # Check counts and GP2IDs
-    gp2_ids(manifest, study_name)
+    df = gp2_ids(manifest, study_name)
         
-    # Check for missing optional columns from template
-    optional_cols(cisi, missing_outcome, df)
+    # Check for missing optional outcome columns from template
+    optional_outcomes(cisi, missing_outcome, df)
 
     # Create column that combines values from age of diagnosis first then age of onset
     df = cisi.add_age_outcome(df) 
@@ -58,7 +58,7 @@ if data_file is not None and study_name is not None:
     numeric_ranges(cisi, df)
 
     # Warn if sample does not have visit_month = 0
-    visit_month_zero(cisi, df)
+    df = visit_month_zero(cisi, df)
 
     # Warn if sample has age values < 25
     flag_ages(cisi, df)
@@ -81,7 +81,7 @@ if data_file is not None and study_name is not None:
         st.session_state['cisi_counter'] = 0
         qc_col1.selectbox(
             "Choose a CISI-PD metric", st.session_state['cisi_variable'], label_visibility='collapsed')
-        b1 = qc_col2.button("Continue", on_click=cisi.call_on, args = ['cisi_btn'])
+        qc_col2.button("Continue", on_click=cisi.call_on, args = ['cisi_btn'])
         get_varname = None
     else:
         qc1.markdown('### CISI-PD Quality Control')
@@ -99,6 +99,7 @@ if data_file is not None and study_name is not None:
                                                     on=['clinical_id',
                                                         'visit_month'],
                                                     how='outer'), st.session_state['cisi_data_chunks'])
+
     if st.session_state['cisi_btn']:
 
         # reorder columns for display
