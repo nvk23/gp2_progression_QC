@@ -230,7 +230,11 @@ class MDS_UPDRS_PT1(AppConfig):
 
     def config_MDS_UPDRS_PT1(self):
         pt1_ss = AppConfig.SESSION_STATES.copy()
-        pt1_ss['variable'] = list(MDS_UPDRS_PT1.OUTCOMES_DICT.keys())
+        var_list = list(MDS_UPDRS_PT1.OUTCOMES_DICT.keys())
+        var_list.extend(['MDS-UPDRS Part I Questions 1-6 Summary Sub-Score', 
+                        'MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score',
+                        'MDS-UPDRS Part I Summary Score'])
+        pt1_ss['variable'] = var_list
         super().config_variables(pt1_ss)
 
     def check_required(self, df):

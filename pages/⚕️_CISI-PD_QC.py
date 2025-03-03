@@ -88,7 +88,7 @@ if data_file is not None and study_name is not None:
         st.session_state['cisi_pd_counter'] += 1
         if len(st.session_state['cisi_pd_variable']) >= 1:
             cisi_version = qc_col1.selectbox(
-                "Choose an cisi version", st.session_state['cisi_pd_variable'], on_change=cisi.call_off, args = ['cisi_pd_btn'], label_visibility='collapsed')
+                "Choose a CISI-PD metric", st.session_state['cisi_pd_variable'], on_change=cisi.call_off, args = ['cisi_pd_btn'], label_visibility='collapsed')
             get_varname = cisi.OUTCOMES_DICT[cisi_version]
             qc_col2.button("Continue", on_click = cisi.call_on, args = ['cisi_pd_btn'])
         else:

@@ -82,6 +82,12 @@ if data_file is not None and study_name is not None:
     qc_col1, qc_col2, qc_col3 = st.columns(3)
     qc_count1, qc_count2, qc_count3 = st.columns(3)
 
+    # Add subscore and summary scores to drop-down selection
+    varnames = {key: mds_updrs_pt1.OUTCOMES_DICT[key] for key in st.session_state['mds_updrs_pt1_variable'] if key in mds_updrs_pt1.OUTCOMES_DICT}
+    varnames['MDS-UPDRS Part I Questions 1-6 Summary Sub-Score'] = 'mds_updrs_part_i_sub_score'
+    varnames['MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score'] = 'mds_updrs_part_i_pat_quest_sub_score'
+    varnames['MDS-UPDRS Part I Summary Score'] = 'mds_updrs_part_i_summary_score'
+
     if 'mds_updrs_pt1_counter' not in st.session_state:
         qc1.markdown('### MDS UPDRS Part 1 Quality Control')
         st.session_state['mds_updrs_pt1_counter'] = 0
@@ -94,8 +100,8 @@ if data_file is not None and study_name is not None:
         st.session_state['mds_updrs_pt1_counter'] += 1
         if len(st.session_state['mds_updrs_pt1_variable']) >= 1:
             mds_updrs_pt1_version = qc_col1.selectbox(
-                "Choose an MDS UPDRS Part 1 version", st.session_state['mds_updrs_pt1_variable'], on_change=mds_updrs_pt1.call_off, args = ['mds_updrs_pt1_btn'], label_visibility='collapsed')
-            get_varname = mds_updrs_pt1.OUTCOMES_DICT[mds_updrs_pt1_version]
+                "Choose an MDS UPDRS Part 1 metric", varnames.keys(), on_change=mds_updrs_pt1.call_off, args = ['mds_updrs_pt1_btn'], label_visibility='collapsed')
+            get_varname = varnames[mds_updrs_pt1_version]
             qc_col2.button("Continue", on_click = mds_updrs_pt1.call_on, args = ['mds_updrs_pt1_btn'])
         else:
             st.markdown(
