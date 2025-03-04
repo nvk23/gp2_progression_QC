@@ -111,7 +111,8 @@ def plot_interactive_first_vs_last(df_sf, strata):
 
 
 def plot_interactive_visit_month(df, outcome, strata):
-    st.markdown('#### Visit Month vs. Hoehn and Yahr Stage')
+    title_name = outcome.replace('_', ' ').title()
+    st.markdown(f'#### Visit Month vs. {title_name}')
 
     # Add jitter
     df[f'{outcome}_jittered'] = add_jitter(df[outcome])
@@ -124,8 +125,7 @@ def plot_interactive_visit_month(df, outcome, strata):
         y=f'{outcome}_jittered',
         color=strata,
         hover_data=['GP2ID',  'GP2_phenotype', 'study_arm'],
-        # title='Visit Month vs. Hoehn and Yahr Stage (Jittered)',
-        labels={'visit_month_jittered': 'Visit Month (Jittered)', 'hoehn_and_yahr_stage_jittered': 'Hoehn and Yahr Stage (Jittered)'}
+        labels={'visit_month_jittered': 'Visit Month (Jittered)', f'{outcome}_jittered': f'{title_name} Stage (Jittered)'}
     )
 
     st.plotly_chart(fig, use_container_width=True)
