@@ -10,53 +10,6 @@ import plotly.graph_objects as go
 
 def plot_km_curve(df_sv, strata, threshold, direction):
     """
-    Plots Kaplan-Meier survival curve using lifelines package.
-    
-    Parameters:
-        df_sv: pandas.DataFrame
-            The DataFrame containing survival data.
-        strata: str
-            The column name for stratification.
-        threshold: float
-            Threshold value to display in the title.
-        direction: str
-            Direction of the event (e.g., "greater than" or "less than").
-    """
-    kmf = KaplanMeierFitter()
-    plt.figure(figsize=(10, 6))
-
-    ax = plt.subplot(111)
-
-    # Plot the KM curve for each group in strata
-    for name, grouped_df in df_sv.groupby(strata):
-        kmf.fit(durations=grouped_df['censored_month'], event_observed=grouped_df['event'], label=name)
-        # st.dataframe(kmf.survival_function_)
-        kmf.plot_survival_function(ax=ax, ci_show=False)
-    
-    # Manual adding at risk numbers
-    event_tables = {}
-    for name, grouped_df in df_sv.groupby(strata):
-        kmf.fit(durations=grouped_df['censored_month'], event_observed=grouped_df['event'], label=name)
-        event_tables[name] = kmf.event_table['at_risk']
-    
-    # Add at risk numbers to the plot - currently not displaying properly
-    # for i, (name, event_table) in enumerate(event_tables.items()):
-    #     times = event_table.index
-    #     at_risk_counts = event_table.values
-    #     for j, (time, count) in enumerate(zip(times, at_risk_counts)):
-    #         ax.annotate(f'{count}', xy=(time, 0.1 - i*0.05), xytext=(time, 0.1 - i*0.05),
-    #                     textcoords='offset points', fontsize=8, color='black')
-
-    plt.title(f'Kaplan-Meier Survival Curve: Event = {direction} a Score of {threshold}')
-    plt.xlabel('Time (Months)')
-    plt.ylabel('Survival Probability')
-    plt.ylim([0,1.01])
-    plt.legend(title=strata)
-    plt.grid(True)
-    st.pyplot(plt)
-
-def plot_km_curve_plotly(df_sv, strata, threshold, direction):
-    """
     Plots an interactive Kaplan-Meier survival curve using Plotly.
     
     Parameters:
@@ -158,7 +111,8 @@ def plot_interactive_first_vs_last(df_sf, strata):
 
 
 def plot_interactive_visit_month(df, outcome, strata):
-    st.markdown('#### Visit Month vs. Hoehn and Yahr Stage')
+    title_name = outcome.replace('_', ' ').title()
+    st.markdown(f'#### Visit Month vs. {title_name}')
 
     # Add jitter
     df[f'{outcome}_jittered'] = add_jitter(df[outcome])
@@ -171,8 +125,46 @@ def plot_interactive_visit_month(df, outcome, strata):
         y=f'{outcome}_jittered',
         color=strata,
         hover_data=['GP2ID',  'GP2_phenotype', 'study_arm'],
-        # title='Visit Month vs. Hoehn and Yahr Stage (Jittered)',
-        labels={'visit_month_jittered': 'Visit Month (Jittered)', 'hoehn_and_yahr_stage_jittered': 'Hoehn and Yahr Stage (Jittered)'}
+        labels={'visit_month_jittered': 'Visit Month (Jittered)', f'{outcome}_jittered': f'{title_name} Stage (Jittered)'}
     )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_baseline_scores(df, metric, metric_name, strata):
+    fig = px.histogram(df, x=metric, color=strata, title=f"{metric_name} Scores per Sample")
+    fig.update_xaxes(title_text=metric_name, tickmode='array', tickvals=[0, 1, 2, 3, 4, 5, 6])
+
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_duration_values(df, metric, metric_name, min_outcome, max_outcome):
+    # Define bin edges
+    bin_edges = np.arange(0, df["disease_duration"].max() + 3, 3)
+    bin_labels = [f"{int(b)}-{int(b+3)}" for b in bin_edges[:-1]]
+
+    # Assign bins to a new column
+    df["duration_bins"] = pd.cut(df["disease_duration"], bins=bin_edges, labels=bin_labels, include_lowest=True)
+
+    # Count occurrences per bin
+    bin_counts = df["duration_bins"].value_counts()
+
+    # Separate bins with only one value
+    single_value_bins = bin_counts[bin_counts == 1].index
+    multi_value_bins = bin_counts[bin_counts > 1].index
+
+    df_single = df[df["duration_bins"].isin(single_value_bins)]
+    df_multi = df[df["duration_bins"].isin(multi_value_bins)]
+
+    # Creates violin plots - turned off outlier points
+    fig = px.violin(df_multi, x="duration_bins", y=metric, box=True, points=False,
+                    title=f"{metric_name} Distribution Across Disease Duration Bins",
+                    category_orders={"duration_bins": bin_labels})
+
+    # Add scatter plot for bins with only one value
+    fig.add_trace(px.scatter(df_single, x="duration_bins", y=metric).data[0])
+
+    # Update axes labels
+    fig.update_xaxes(title_text="Disease Duration (Years)")
+    fig.update_yaxes(title_text=metric_name)
+    fig.update_layout(yaxis=dict(range=[min_outcome, max_outcome], showgrid=True))
 
     st.plotly_chart(fig, use_container_width=True)
