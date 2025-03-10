@@ -225,15 +225,16 @@ class MDS_UPDRS_PT1(AppConfig):
                     'Urinary Problems (UPD2110)': 'code_upd2110_pat_quest_urinary_problems',
                     'Constipation Problems (UPD2111)': 'code_upd2111_pat_quest_constipation_problems',
                     'Lightheadedness on Standing (UPD2112)': 'code_upd2112_pat_quest_lightheadedness_on_standing',
-                    'Fatigue (UPD2113)': 'code_upd2113_pat_quest_fatigue'}
+                    'Fatigue (UPD2113)': 'code_upd2113_pat_quest_fatigue',
+                    'MDS-UPDRS Part I Questions 1-6 Summary Sub-Score': 'mds_updrs_part_i_sub_score', 
+                    'MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score': 'mds_updrs_part_i_pat_quest_sub_score',
+                    'MDS-UPDRS Part I Summary Score': 'mds_updrs_part_i_summary_score'}
     NUMERIC_RANGE = [0, 4]
+    SUM_RANGES = {'mds_updrs_part_i_sub_score': [0, 24], 'mds_updrs_part_i_pat_quest_sub_score': [0, 28], 'mds_updrs_part_i_summary_score': [0, 52]}
 
     def config_MDS_UPDRS_PT1(self):
         pt1_ss = AppConfig.SESSION_STATES.copy()
         var_list = list(MDS_UPDRS_PT1.OUTCOMES_DICT.keys())
-        var_list.extend(['MDS-UPDRS Part I Questions 1-6 Summary Sub-Score', 
-                        'MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score',
-                        'MDS-UPDRS Part I Summary Score'])
         pt1_ss['variable'] = var_list
         super().config_variables(pt1_ss)
 
@@ -251,17 +252,34 @@ class MDS_UPDRS_PT1(AppConfig):
         if 'Invalid Data Types' in out_of_range:
             return out_of_range
 
-        for col in MDS_UPDRS_PT1.OUTCOMES_DICT.values():
+        # Only focus on individual input cols
+        indiv_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[:-3]
+        for col in indiv_cols:
             if col in df.columns: # not all columns are required
                 invalid_values = df[(df[col] < MDS_UPDRS_PT1.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT1.NUMERIC_RANGE[1])][col]
                 if not invalid_values.empty:
                     out_of_range[col] = invalid_values.tolist()
+
+        # Sum scores only if provided
+        for col, (lower, upper) in MDS_UPDRS_PT1.SUM_RANGES.items():
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < lower) | (df[col] > upper)][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+
         return out_of_range
     
     def calc_scores(self, df):
         sub1_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[:5]
         sub2_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[6:]
-        df['mds_updrs_part_i_sub_score'] = df[sub1_cols].sum(axis=1)
-        df['mds_updrs_part_i_pat_quest_sub_score'] = df[sub2_cols].sum(axis=1)
-        df['mds_updrs_part_i_summary_score'] = df['mds_updrs_part_i_sub_score'] + df['mds_updrs_part_i_pat_quest_sub_score']
+        sum_cols = list(MDS_UPDRS_PT1.SUM_RANGES.keys())
+        
+        # Calculate sum but overwrite with null if any cols not provided
+        df[sum_cols[0]] = df[sub1_cols].sum(axis=1)
+        df.loc[df[sub1_cols].isna().any(axis=1), sum_cols[0]] = np.nan
+
+        df[sum_cols[1]] = df[sub2_cols].sum(axis=1)
+        df.loc[df[sub2_cols].isna().any(axis=1), sum_cols[1]] = np.nan
+
+        df[sum_cols[2]] = df[sum_cols[0]] + df[sum_cols[1]]
         return df
