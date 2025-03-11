@@ -230,7 +230,7 @@ class MDS_UPDRS_PT1(AppConfig):
                     'MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score': 'mds_updrs_part_i_pat_quest_sub_score',
                     'MDS-UPDRS Part I Summary Score': 'mds_updrs_part_i_summary_score'}
     NUMERIC_RANGE = [0, 4]
-    SUM_RANGES = {'mds_updrs_part_i_sub_score': [0, 24], 'mds_updrs_part_i_pat_quest_sub_score': [0, 28], 'mds_updrs_part_i_summary_score': [0, 52]}
+    NUMERIC_RANGES = {'mds_updrs_part_i_sub_score': [0, 24], 'mds_updrs_part_i_pat_quest_sub_score': [0, 28], 'mds_updrs_part_i_summary_score': [0, 52]}
 
     def config_MDS_UPDRS_PT1(self):
         pt1_ss = AppConfig.SESSION_STATES.copy()
@@ -261,7 +261,7 @@ class MDS_UPDRS_PT1(AppConfig):
                     out_of_range[col] = invalid_values.tolist()
 
         # Sum scores only if provided
-        for col, (lower, upper) in MDS_UPDRS_PT1.SUM_RANGES.items():
+        for col, (lower, upper) in MDS_UPDRS_PT1.NUMERIC_RANGES.items():
             if col in df.columns: # not all columns are required
                 invalid_values = df[(df[col] < lower) | (df[col] > upper)][col]
                 if not invalid_values.empty:
@@ -272,7 +272,7 @@ class MDS_UPDRS_PT1(AppConfig):
     def calc_sub_scores(self, df):
         sub1_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[:5]
         sub2_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[6:]
-        sum_cols = list(MDS_UPDRS_PT1.SUM_RANGES.keys())
+        sum_cols = list(MDS_UPDRS_PT1.NUMERIC_RANGES.keys())
         
         # Calculate sum but overwrite with null if any cols not provided
         df[sum_cols[0]] = df[sub1_cols].sum(axis=1)
@@ -283,7 +283,7 @@ class MDS_UPDRS_PT1(AppConfig):
         return df
     
     def calc_sum(self, df):
-        sum_cols = list(MDS_UPDRS_PT1.SUM_RANGES.keys())
+        sum_cols = list(MDS_UPDRS_PT1.NUMERIC_RANGES.keys())
         df[sum_cols[2]] = df[sum_cols[0]] + df[sum_cols[1]]
         df.loc[df[sum_cols[0]].isna().any(axis=1), sum_cols[2]] = np.nan
         df.loc[df[sum_cols[1]].isna().any(axis=1), sum_cols[2]] = np.nan

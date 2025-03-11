@@ -140,13 +140,13 @@ def numeric_ranges(page, df):
         st.error(f'We have detected values that are out of range in the column(s) _{", ".join(list(out_of_range.keys()))}_. \
                     Values in these columns should be numeric and between the following permitted ranges:')
         for col in out_of_range.keys():
-            col_range = page.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, "Unknown Range"))
+            col_range = page.NUMERIC_RANGES.get(col, AppConfig.NUMERIC_RANGES.get(col, page.NUMERIC_RANGE))
             st.markdown(f'* _{col} : {col_range}_')
             st.dataframe(df[df[col].isin(out_of_range[col])])
         st.stop()
 
 def mds_updrs_scores(page, available_metrics, df):
-    sum_scores = list(page.SUM_RANGES.keys())
+    sum_scores = list(page.NUMERIC_RANGES.keys())
     check_scores = any(elem in available_metrics for elem in sum_scores)
     all_subscores = all(elem in available_metrics for elem in sum_scores[:-1])
 
