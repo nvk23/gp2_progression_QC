@@ -269,7 +269,7 @@ class MDS_UPDRS_PT1(AppConfig):
 
         return out_of_range
     
-    def calc_scores(self, df):
+    def calc_sub_scores(self, df):
         sub1_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[:5]
         sub2_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[6:]
         sum_cols = list(MDS_UPDRS_PT1.SUM_RANGES.keys())
@@ -280,6 +280,11 @@ class MDS_UPDRS_PT1(AppConfig):
 
         df[sum_cols[1]] = df[sub2_cols].sum(axis=1)
         df.loc[df[sub2_cols].isna().any(axis=1), sum_cols[1]] = np.nan
-
+        return df
+    
+    def calc_sum(self, df):
+        sum_cols = list(MDS_UPDRS_PT1.SUM_RANGES.keys())
         df[sum_cols[2]] = df[sum_cols[0]] + df[sum_cols[1]]
+        df.loc[df[sum_cols[0]].isna().any(axis=1), sum_cols[2]] = np.nan
+        df.loc[df[sum_cols[1]].isna().any(axis=1), sum_cols[2]] = np.nan
         return df

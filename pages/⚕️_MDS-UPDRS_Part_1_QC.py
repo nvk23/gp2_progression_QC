@@ -11,7 +11,7 @@ from utils.writeread import read_file, get_master, get_studycode
 from utils.app_setup import MDS_UPDRS_PT1
 from utils.manifest_setup import ManifestConfig
 from utils.qc_utils import (prep_merge, compare_manifest, gp2_ids, optional_cols, null_vals, numeric_ranges, flag_ages,
-                            chronological_ages, age_consistency, visit_month_zero, outcome_qc, cleaned_df,
+                            chronological_ages, age_consistency, visit_month_zero, outcome_qc, cleaned_df, mds_updrs_scores,
                             check_strata, plot_outcomes, review_sample, qc_submit)
 
 # Page set-up
@@ -72,8 +72,8 @@ if data_file is not None and study_name is not None:
     # Make sure age_at_baseline is consistent for the same clinical IDs
     age_consistency(df)
 
-    # Calculate summary scores
-    df = mds_updrs_pt1.calc_scores(df)
+    # Calculate summary scores depending on available inputs
+    df = mds_updrs_scores(mds_updrs_pt1, available_metrics, df)
 
     st.success('Your clinical data has passed all required up-front checks!')
     st.markdown('---------')
@@ -81,12 +81,6 @@ if data_file is not None and study_name is not None:
     qc1, qc2 = st.columns(2)
     qc_col1, qc_col2, qc_col3 = st.columns(3)
     qc_count1, qc_count2, qc_count3 = st.columns(3)
-
-    # Add subscore and summary scores to drop-down selection
-    varnames = {key: mds_updrs_pt1.OUTCOMES_DICT[key] for key in st.session_state['mds_updrs_pt1_variable'] if key in mds_updrs_pt1.OUTCOMES_DICT}
-    varnames['MDS-UPDRS Part I Questions 1-6 Summary Sub-Score'] = 'mds_updrs_part_i_sub_score'
-    varnames['MDS-UPDRS Part I Patient Questionnaire Questions 7-13 Summary  Sub-Score'] = 'mds_updrs_part_i_pat_quest_sub_score'
-    varnames['MDS-UPDRS Part I Summary Score'] = 'mds_updrs_part_i_summary_score'
 
     if 'mds_updrs_pt1_counter' not in st.session_state:
         qc1.markdown('### MDS UPDRS Part 1 Quality Control')
@@ -100,8 +94,8 @@ if data_file is not None and study_name is not None:
         st.session_state['mds_updrs_pt1_counter'] += 1
         if len(st.session_state['mds_updrs_pt1_variable']) >= 1:
             mds_updrs_pt1_version = qc_col1.selectbox(
-                "Choose an MDS UPDRS Part 1 metric", varnames.keys(), on_change=mds_updrs_pt1.call_off, args = ['mds_updrs_pt1_btn'], label_visibility='collapsed')
-            get_varname = varnames[mds_updrs_pt1_version]
+                "Choose an MDS UPDRS Part 1 metric",st.session_state['mds_updrs_pt1_variable'], on_change=mds_updrs_pt1.call_off, args = ['mds_updrs_pt1_btn'], label_visibility='collapsed')
+            get_varname = mds_updrs_pt1.OUTCOMES_DICT[mds_updrs_pt1_version]
             qc_col2.button("Continue", on_click = mds_updrs_pt1.call_on, args = ['mds_updrs_pt1_btn'])
         else:
             st.markdown(

@@ -145,6 +145,19 @@ def numeric_ranges(page, df):
             st.dataframe(df[df[col].isin(out_of_range[col])])
         st.stop()
 
+def mds_updrs_scores(page, available_metrics, df):
+    sum_scores = list(page.SUM_RANGES.keys())
+    check_scores = any(elem in available_metrics for elem in sum_scores)
+    all_subscores = all(elem in available_metrics for elem in sum_scores[:-1])
+
+    # Only calculate and replace scores if not provided
+    if not check_scores:
+        df = page.calc_sub_scores(df)
+    if all_subscores:
+        df = page.calc_sum(df)
+
+    return df
+
 def dup_med_vals(df):
     dup_cols = checkDup(df, ['clinical_id', 'visit_month', 'clinical_state_on_medication', 'dbs_status'])
     if len(dup_cols) > 0:
