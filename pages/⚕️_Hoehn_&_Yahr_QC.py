@@ -54,9 +54,8 @@ if data_file is not None and study_name is not None:
     optional_cols(hy, df)
 
     # Add "clinical_state_on_medication" and "dbs_status" column if don't exist already
-    for col in ['clinical_state_on_medication', 'dbs_status']:
-        if col not in df.columns:
-            hy.nullify(df, col)
+    missing_cols = [col for col in ['clinical_state_on_medication', 'dbs_status'] if col not in df.columns]
+    hy.nullify(df, missing_cols)
 
     # Create column that combines values from age of diagnosis first then age of onset
     df = hy.add_age_outcome(df) 
