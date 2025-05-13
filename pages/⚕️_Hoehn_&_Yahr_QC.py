@@ -53,8 +53,10 @@ if data_file is not None and study_name is not None:
     # Check for missing optional outcome columns from template
     optional_cols(hy, df)
 
-    # Add "clinical_state_on_medication" column if don't exist already
-    hy.nullify(df, ['clinical_state_on_medication', 'dbs_status'])
+    # Add "clinical_state_on_medication" and "dbs_status" column if don't exist already
+    for col in ['clinical_state_on_medication', 'dbs_status']:
+        if col not in df.columns:
+            hy.nullify(df, col)
 
     # Create column that combines values from age of diagnosis first then age of onset
     df = hy.add_age_outcome(df) 
