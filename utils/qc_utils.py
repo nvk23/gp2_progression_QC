@@ -124,13 +124,21 @@ def null_vals(page, available_metrics, df):
     df_nulls = page.check_nulls(df, available_metrics)
 
     if len(df_nulls) > 0:
-        st.error(
-            f'There are missing entries in the following required columns. Please fill in the missing cells.')
-        st.markdown('_Missing Required Values:_')
+        if len(df_nulls.columns) > len(page.REQUIRED_COLS):
+            st.warning(
+                f'There are missing entries in the following columns. Please fill in the missing cells.')
+            st.markdown('_Missing Required Values:_')
+            
+            # Display dataframe with missing value rows
+            st.dataframe(df_nulls, use_container_width=True)
+        else:
+            st.error(
+                f'There are missing entries in the following required columns. Please fill in the missing cells.')
+            st.markdown('_Missing Required Values:_')
 
-        # Display dataframe with missing value rows
-        st.dataframe(df_nulls, use_container_width=True)
-        st.stop()
+            # Display dataframe with missing value rows
+            st.dataframe(df_nulls, use_container_width=True)
+            st.stop()
 
 def numeric_ranges(page, df):
     # Make sure numeric columns are in proper ranges - flag 25 and below for age columns & 0 for visit_month

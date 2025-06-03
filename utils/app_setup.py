@@ -90,19 +90,24 @@ class AppConfig():
         return missing_extra, missing_req
     
     def check_nulls(self, df, extra_cols):
-        # Missing values in required columns
-        check_cols = AppConfig.REQUIRED_COLS.copy()
-        check_cols.extend(extra_cols)
-        check_cols = np.unique(check_cols)
+        # Check columms outside of required cols
+        check_cols = list(set(AppConfig.REQUIRED_COLS + extra_cols))
 
-        show_cols = AppConfig.REQUIRED_COLS.copy()
-        show_cols.append('GP2ID')
-        show_cols.extend(AppConfig.AGE_COLS)
+        # Display required columns
+        show_cols = list(set(AppConfig.REQUIRED_COLS + ['GP2ID'] + AppConfig.AGE_COLS))
+
+        # Find any cols in extra_cols with nulls to display
+        null_extra_cols = df[extra_cols].columns[df[extra_cols].isna().any()].tolist()
+        show_cols.extend(null_extra_cols)
+
+        # Remove any duplicates and preserve order
         show_cols = np.unique(show_cols)
-        df_nulls = df[show_cols][df[check_cols].isna().any(axis=1)]
+
+        # Only display and return rows with null values
+        null_rows = df[check_cols].isna().any(axis=1)
+
+        return df.loc[null_rows, show_cols]
         
-        return df_nulls
-    
     def check_data_types(self, df):
         invalid_types = {}
         for col in self.NUMERIC_RANGES.keys():
@@ -239,7 +244,7 @@ class MDS_UPDRS_PT1(AppConfig):
         super().config_variables(pt1_ss)
 
     def check_required(self, df):
-        return super().missing_required(df, list(MDS_UPDRS_PT1.OUTCOMES_DICT.values()))
+        return super().missing_required(df)
     
     def missing_optional(self, df):
         missing_optional, missing_req = super().missing_required(df, MDS_UPDRS_PT1.OPTIONAL_COLS)
@@ -287,4 +292,94 @@ class MDS_UPDRS_PT1(AppConfig):
         df[sum_cols[2]] = df[sum_cols[0]] + df[sum_cols[1]]
         df.loc[df[sum_cols[0]].isna().any(axis=1), sum_cols[2]] = np.nan
         df.loc[df[sum_cols[1]].isna().any(axis=1), sum_cols[2]] = np.nan
+        return df
+    
+class MDS_UPDRS_PT3(AppConfig):
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1FcZXKpr0PsYfUGrONX9SUzCNb6afezvxq79dTBKBvZg/edit?gid=2129228836#gid=2129228836'
+    OPTIONAL_COLS = ["upd23a_medication_for_pd", "upd23b_clinical_state_on_medication", "upd23c_on_levodopa"]
+    STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
+    OUTCOMES_DICT = {"Speech Problems (UPD2301)": "code_upd2301_speech_problems",
+                    "Facial Expression (UPD2302)": "code_upd2302_facial_expression",
+                    "Rigidity Neck (UPD2303A)": "code_upd2303a_rigidity_neck",
+                    "Rigidity Right Upper Extremity (UPD2303B)": "code_upd2303b_rigidity_rt_upper_extremity",
+                    "Rigidity Left Upper Extremity (UPD2303C)": "code_upd2303c_rigidity_left_upper_extremity",
+                    "Rigidity Right Lower Extremity (UPD2303D)": "code_upd2303d_rigidity_rt_lower_extremity",
+                    "Rigidity Left Lower Extremity (UPD2303E)": "code_upd2303e_rigidity_left_lower_extremity",
+                    "Right Finger Tapping (UPD2304A)": "code_upd2304a_right_finger_tapping",
+                    "Left Finger Tapping (UPD2304B)": "code_upd2304b_left_finger_tapping",
+                    "Right Hand Movements (UPD2305A)": "code_upd2305a_right_hand_movements",
+                    "Left Hand Movements (UPD2305B)": "code_upd2305b_left_hand_movements",
+                    "Pronanation-Supination Movement Of Right Hand (UPD2306A)": "code_upd2306a_pron_sup_movement_right_hand",
+                    "Pronanation-Supination Movement Of Left Hand (UPD2306B)": "code_upd2306b_pron_sup_movement_left_hand",
+                    "Right Toe Tapping (UPD2307A)": "code_upd2307a_right_toe_tapping",
+                    "Left Toe Tapping (UPD2307B)": "code_upd2307b_left_toe_tapping",
+                    "Right Leg Agility (UPD2308A)": "code_upd2308a_right_leg_agility",
+                    "Left Leg Agility (UPD2308B)": "code_upd2308b_left_leg_agility",
+                    "Arising from Chair (UPD2309)": "code_upd2309_arising_from_chair",
+                    "Gait (UPD2310)": "code_upd2310_gait",
+                    "Freezing Of Gait (UPD2311)": "code_upd2311_freezing_of_gait",
+                    "Postural Stability (UPD2312)": "code_upd2312_postural_stability",
+                    "Posture (UPD2313)": "code_upd2313_posture",
+                    "Body Bradykinesia (UPD2314)": "code_upd2314_body_bradykinesia",
+                    "Postural Tremor Of Right Hand (UPD2315A)": "code_upd2315a_postural_tremor_of_right_hand",
+                    "Postural Tremor Of Left Hand (UPD2315B)": "code_upd2315b_postural_tremor_of_left_hand",
+                    "Kinetic Tremor Of Right Hand (UPD2316A)": "code_upd2316a_kinetic_tremor_of_right_hand",
+                    "Kinetic Tremor Of Left Hand (UPD2316B)": "code_upd2316b_kinetic_tremor_of_left_hand",
+                    "Rest Tremor Amplitude Right Upper Extremity (UPD2317A)": "code_upd2317a_rest_tremor_amplitude_right_upper_extremity",
+                    "Rest Tremor Amplitude Left Upper Extremity (UPD2317B)": "code_upd2317b_rest_tremor_amplitude_left_upper_extremity",
+                    "Rest Tremor Amplitude Right Lower Extremity (UPD2317C)": "code_upd2317c_rest_tremor_amplitude_right_lower_extremity",
+                    "Rest Tremor Amplitude Left Lower Extremity (UPD2317D)": "code_upd2317d_rest_tremor_amplitude_left_lower_extremity",
+                    "Rest Tremor Amplitude Lip Or Jaw (UPD2317E)": "code_upd2317e_rest_tremor_amplitude_lip_or_jaw",
+                    "Consistency Of Rest Tremor (UPD2318)": "code_upd2318_consistency_of_rest_tremor",
+                    "Dyskinesias During Exam (UPD2DA)": "upd2da_dyskinesias_during_exam",
+                    "Movements Interfere with Ratings (UPD2DB)": "upd2db_movements_interfere_with_ratings",
+                    "MDS-UPDRS Part III Summary Score": "mds_updrs_part_iii_summary_score"}
+    NUMERIC_RANGE = [0, 4]
+    NUMERIC_RANGES = {'upd23c1_min_since_last_levodopa': [0, 1440], 'mds_updrs_part_iii_summary_score': [0, 132]}
+
+    def config_MDS_UPDRS_PT3(self):
+        pt3_ss = AppConfig.SESSION_STATES.copy()
+        var_list = list(MDS_UPDRS_PT3.OUTCOMES_DICT.keys())
+        pt3_ss['variable'] = var_list
+        super().config_variables(pt3_ss)
+
+    def check_required(self, df):
+        return super().missing_required(df, list(MDS_UPDRS_PT3.OUTCOMES_DICT.values()))
+    
+    def missing_optional(self, df):
+        missing_optional, missing_req = super().missing_required(df, MDS_UPDRS_PT3.OPTIONAL_COLS)
+        return missing_optional
+
+    def check_ranges(self, df):
+        out_of_range = super().check_ranges(df)
+
+        # If data type errors exist, return them instead of checking ranges
+        if 'Invalid Data Types' in out_of_range:
+            return out_of_range
+
+        # Only focus on individual input cols
+        indiv_cols = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())[:-3]
+        for col in indiv_cols:
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < MDS_UPDRS_PT3.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT3.NUMERIC_RANGE[1])][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+
+        # Sum scores only if provided
+        for col, (lower, upper) in MDS_UPDRS_PT3.NUMERIC_RANGES.items():
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < lower) | (df[col] > upper)][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+
+        return out_of_range
+    
+    def calc_sum(self, df):
+        sum_cols = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())[:-1]
+        sum_score = MDS_UPDRS_PT3.OUTCOMES_DICT.values()[-1]
+        
+        # Calculate sum but overwrite with null if any cols not provided
+        df[sum_score] = df[sum_cols].sum(axis=1)
+        df.loc[df[sum_cols].isna().any(axis=1), sum_score] = np.nan
+
         return df
