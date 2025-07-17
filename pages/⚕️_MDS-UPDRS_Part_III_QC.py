@@ -83,18 +83,18 @@ if data_file is not None and study_name is not None:
     qc_count1, qc_count2, qc_count3 = st.columns(3)
 
     if 'mds_updrs_pt3_counter' not in st.session_state:
-        qc1.markdown('### MDS UPDRS Part 1 Quality Control')
+        qc1.markdown('### MDS UPDRS Part III Quality Control')
         st.session_state['mds_updrs_pt3_counter'] = 0
         qc_col1.selectbox(
-            "Choose an MDS UPDRS Part 1 metric", st.session_state['mds_updrs_pt3_variable'], label_visibility='collapsed')
+            "Choose an MDS UPDRS Part III metric", st.session_state['mds_updrs_pt3_variable'], label_visibility='collapsed')
         qc_col2.button("Continue", on_click=mds_updrs_pt3.call_on, args = ['mds_updrs_pt3_btn'])
         get_varname = None
     else:
-        qc1.markdown('### MDS UPDRS Part 1 Quality Control')
+        qc1.markdown('### MDS UPDRS Part III Quality Control')
         st.session_state['mds_updrs_pt3_counter'] += 1
         if len(st.session_state['mds_updrs_pt3_variable']) >= 1:
             mds_updrs_pt3_version = qc_col1.selectbox(
-                "Choose an MDS UPDRS Part 1 metric",st.session_state['mds_updrs_pt3_variable'], on_change=mds_updrs_pt3.call_off, args = ['mds_updrs_pt3_btn'], label_visibility='collapsed')
+                "Choose an MDS UPDRS Part III metric",st.session_state['mds_updrs_pt3_variable'], on_change=mds_updrs_pt3.call_off, args = ['mds_updrs_pt3_btn'], label_visibility='collapsed')
             get_varname = mds_updrs_pt3.OUTCOMES_DICT[mds_updrs_pt3_version]
             qc_col2.button("Continue", on_click = mds_updrs_pt3.call_on, args = ['mds_updrs_pt3_btn'])
         else:

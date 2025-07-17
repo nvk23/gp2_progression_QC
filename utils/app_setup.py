@@ -214,6 +214,7 @@ class CISI(AppConfig):
                     out_of_range[col] = invalid_values.tolist()
         return out_of_range
     
+# May need to make parent class for all MDS-UPDRS metrics
 class MDS_UPDRS_PT1(AppConfig):
     TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1sRpbvlmHB0rtBMIuGW6YI7st3eWK-XvXPBe149pY4v8/edit?gid=869233872#gid=869233872'
     OPTIONAL_COLS = ['mds_updrs_part_i_primary_info_source', 'mds_updrs_part_i_pat_quest_primary_info_source']
@@ -258,7 +259,8 @@ class MDS_UPDRS_PT1(AppConfig):
             return out_of_range
 
         # Only focus on individual input cols
-        indiv_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())[:-3]
+        indiv_cols = list(MDS_UPDRS_PT1.OUTCOMES_DICT.values())
+        indiv_cols = [col for col in indiv_cols if col not in list(MDS_UPDRS_PT1.NUMERIC_RANGES.keys())]
         for col in indiv_cols:
             if col in df.columns: # not all columns are required
                 invalid_values = df[(df[col] < MDS_UPDRS_PT1.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT1.NUMERIC_RANGE[1])][col]
@@ -292,6 +294,75 @@ class MDS_UPDRS_PT1(AppConfig):
         df[sum_cols[2]] = df[sum_cols[0]] + df[sum_cols[1]]
         df.loc[df[sum_cols[0]].isna().any(axis=1), sum_cols[2]] = np.nan
         df.loc[df[sum_cols[1]].isna().any(axis=1), sum_cols[2]] = np.nan
+        return df
+    
+class MDS_UPDRS_PT2(AppConfig):
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1gUX4LV38DZj6fBmRI8zQGFkkO3U6LQik-yxWZ70Ehkw/edit?gid=0#gid=0'
+    OPTIONAL_COLS = ["mds_updrs_part_ii_primary_info_source"]
+    STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
+    OUTCOMES_DICT = {"Speech (UPD2201)": "code_upd2201_speech",
+                    "Saliva And Drooling (UPD2202)": "code_upd2202_saliva_and_drooling",
+                    "Chewing And Swallowing (UPD2203)": "code_upd2203_chewing_and_swallowing",
+                    "Eating Tasks (UPD2204)": "code_upd2204_eating_tasks",
+                    "Dressing (UPD2205)": "code_upd2205_dressing",
+                    "Hygiene (UPD2206)": "code_upd2206_hygiene",
+                    "Handwriting (UPD2207)": "code_upd2207_handwriting",
+                    "Doing Hobbies And Other Activities (UPD2208)": "code_upd2208_doing_hobbies_and_other_activities",
+                    "Turning In Bed (UPD2209)": "code_upd2209_turning_in_bed",
+                    "Tremor (UPD2210)": "code_upd2210_tremor",
+                    "Get Out Of Bed, Car, Or Deep Chair (UPD2211)": "code_upd2211_get_out_of_bed_car_or_deep_chair",
+                    "Walking And Balance (UPD2212)": "code_upd2212_walking_and_balance",
+                    "Freezing (UPD2213)": "code_upd2213_freezing",
+                    "MDS-UPDRS Part II Summary Score": "mds_updrs_part_ii_summary_score"}
+    NUMERIC_RANGE = [0, 4]
+    NUMERIC_RANGES = {'mds_updrs_part_ii_summary_score': [0, 52]}
+
+    def config_MDS_UPDRS_PT2(self):
+        pt3_ss = AppConfig.SESSION_STATES.copy()
+        var_list = list(MDS_UPDRS_PT2.OUTCOMES_DICT.keys())
+        pt3_ss['variable'] = var_list
+        super().config_variables(pt3_ss)
+
+    def check_required(self, df):
+        return super().missing_required(df, list(MDS_UPDRS_PT2.OUTCOMES_DICT.values()))
+    
+    def missing_optional(self, df):
+        missing_optional, missing_req = super().missing_required(df, MDS_UPDRS_PT2.OPTIONAL_COLS)
+        return missing_optional
+
+    def check_ranges(self, df):
+        out_of_range = super().check_ranges(df)
+
+        # If data type errors exist, return them instead of checking ranges
+        if 'Invalid Data Types' in out_of_range:
+            return out_of_range
+
+        # Only focus on individual input cols
+        indiv_cols = list(MDS_UPDRS_PT2.OUTCOMES_DICT.values())
+        indiv_cols = [col for col in indiv_cols if col not in list(MDS_UPDRS_PT2.NUMERIC_RANGES.keys())]
+        for col in indiv_cols:
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < MDS_UPDRS_PT2.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT2.NUMERIC_RANGE[1])][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+
+        # Sum scores only if provided
+        for col, (lower, upper) in MDS_UPDRS_PT2.NUMERIC_RANGES.items():
+            if col in df.columns: # not all columns are required
+                invalid_values = df[(df[col] < lower) | (df[col] > upper)][col]
+                if not invalid_values.empty:
+                    out_of_range[col] = invalid_values.tolist()
+
+        return out_of_range
+    
+    def calc_sum(self, df):
+        sum_cols = list(MDS_UPDRS_PT2.OUTCOMES_DICT.values())[:-1]
+        sum_score = list(MDS_UPDRS_PT2.OUTCOMES_DICT.values())[-1]
+        
+        # Calculate sum but overwrite with null if any cols not provided
+        df[sum_score] = df[sum_cols].sum(axis=1)
+        df.loc[df[sum_cols].isna().any(axis=1), sum_score] = np.nan
+
         return df
     
 class MDS_UPDRS_PT3(AppConfig):
@@ -358,7 +429,8 @@ class MDS_UPDRS_PT3(AppConfig):
             return out_of_range
 
         # Only focus on individual input cols
-        indiv_cols = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())[:-3]
+        indiv_cols = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())
+        indiv_cols = [col for col in indiv_cols if col not in list(MDS_UPDRS_PT3.NUMERIC_RANGES.keys())]
         for col in indiv_cols:
             if col in df.columns: # not all columns are required
                 invalid_values = df[(df[col] < MDS_UPDRS_PT3.NUMERIC_RANGE[0]) | (df[col] > MDS_UPDRS_PT3.NUMERIC_RANGE[1])][col]
@@ -376,7 +448,7 @@ class MDS_UPDRS_PT3(AppConfig):
     
     def calc_sum(self, df):
         sum_cols = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())[:-1]
-        sum_score = MDS_UPDRS_PT3.OUTCOMES_DICT.values()[-1]
+        sum_score = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())[-1]
         
         # Calculate sum but overwrite with null if any cols not provided
         df[sum_score] = df[sum_cols].sum(axis=1)

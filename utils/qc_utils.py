@@ -127,7 +127,7 @@ def null_vals(page, available_metrics, df):
         if len(df_nulls.columns) > len(page.REQUIRED_COLS):
             st.warning(
                 f'There are missing entries in the following columns. Please fill in the missing cells.')
-            st.markdown('_Missing Required Values:_')
+            st.markdown('_Missing Values:_')
             
             # Display dataframe with missing value rows
             st.dataframe(df_nulls, use_container_width=True)
@@ -155,13 +155,17 @@ def numeric_ranges(page, df):
 
 def mds_updrs_scores(page, available_metrics, df):
     sum_scores = list(page.NUMERIC_RANGES.keys())
-    check_scores = any(elem in available_metrics for elem in sum_scores)
-    all_subscores = all(elem in available_metrics for elem in sum_scores[:-1])
+    sum_metrics = list(page.OUTCOMES_DICT.values())
+    sum_metrics = [m for m in sum_metrics if m not in sum_scores]
+    
+    all_metrics = (
+        all(elem in available_metrics for elem in sum_metrics) and
+        all(df[elem].notnull().all() for elem in sum_metrics if elem in df.columns)
+    )
 
-    # Only calculate and replace scores if not provided
-    if not check_scores:
-        df = page.calc_sub_scores(df)
-    if all_subscores:
+    # Only calculates summary score if all columns are present to sum
+    # Will need to have separate check for MDS-UPDRS Pt 1
+    if all_metrics:
         df = page.calc_sum(df)
 
     return df
