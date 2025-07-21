@@ -38,19 +38,26 @@ class ManifestConfig():
     def compare_cols(self):
         manifest_cols, uploaded_cols = self._get_cols()
 
-        manifest_num = [col for col in manifest_cols if pd.api.types.is_numeric_dtype(self.df[col])]
-        manifest_cat = [col for col in manifest_cols if not pd.api.types.is_numeric_dtype(self.df[col])]
+        # Prevents null value replacement needed for comparison from persisting for df
+        review_df = self.df.copy()
+
+        manifest_num = [col for col in manifest_cols if pd.api.types.is_numeric_dtype(review_df[col])]
+        manifest_cat = [col for col in manifest_cols if not pd.api.types.is_numeric_dtype(review_df[col])]
         
-        uploaded_num = [col for col in uploaded_cols if pd.api.types.is_numeric_dtype(self.df[col])]
-        uploaded_cat = [col for col in uploaded_cols if not pd.api.types.is_numeric_dtype(self.df[col])]
+        uploaded_num = [col for col in uploaded_cols if pd.api.types.is_numeric_dtype(review_df[col])]
+        uploaded_cat = [col for col in uploaded_cols if not pd.api.types.is_numeric_dtype(review_df[col])]
+
+        # Solves issue where None != None returns True in Pandas 
+        review_df.fillna(-9, inplace = True)
 
         # Compare the corresponding columns and only flag for > 1 difference
         unequal_num = [col for x, y in zip(manifest_num, uploaded_num) if not (abs(
-            self.df[x] - self.df[y]) <= 1).all() for col in (x, y)]
+            review_df[x] - review_df[y]) <= 1).all() for col in (x, y)]
         unequal_cat = [col for x, y in zip(manifest_cat, uploaded_cat) if not (
-            self.df[x] == self.df[y]).all() for col in (x, y)]
-        return unequal_num, unequal_cat
+            review_df[x] == review_df[y]).all() for col in (x, y)]
 
+        return unequal_num, unequal_cat
+    
     def find_diff(self, unequal_num, unequal_cat):
         unequal_cols = list(unequal_num + unequal_cat)
 

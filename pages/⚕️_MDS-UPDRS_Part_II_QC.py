@@ -82,6 +82,7 @@ if data_file is not None and study_name is not None:
     qc_col1, qc_col2, qc_col3 = st.columns(3)
     qc_count1, qc_count2, qc_count3 = st.columns(3)
 
+    ### change all streamlit features to page.get_name()!
     if 'mds_updrs_pt2_counter' not in st.session_state:
         qc1.markdown('### MDS UPDRS Part II Quality Control')
         st.session_state['mds_updrs_pt2_counter'] = 0
