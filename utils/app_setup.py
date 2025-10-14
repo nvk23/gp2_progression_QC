@@ -135,7 +135,7 @@ class AppConfig():
 
 
 class HY(AppConfig):
-    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1qexD8xKUaORH-kZjUPWl-1duc_PEwbg0pvvlXQ0OPbY/edit?usp=sharing'
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1WK5eZzfNfJLvA3SymYybqtclFyKpd4Ik/edit?usp=sharing&ouid=100575740984202823884&rtpof=true&sd=true'
     OPTIONAL_COLS = ['clinical_state_on_medication', 'medication_for_pd', 'dbs_status',
                     'ledd_daily', 'comments']
     MED_VALS = {'clinical_state_on_medication': ['ON', 'OFF', 'Unknown'],
@@ -184,7 +184,7 @@ class HY(AppConfig):
         return invalid_med_values
     
 class CISI(AppConfig):
-    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1WD-YPYHUfk5SwS2WDJHq-VG18a5a0JnNIFeainwvBbs/edit?gid=0#gid=0'
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1eNS1m7pxlNZ8RGkx87_Hzwqe7XcXbA4z/edit?usp=sharing&ouid=100575740984202823884&rtpof=true&sd=true'
     STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
     OUTCOMES_DICT = {'CISI-PD Motor Signs': 'code_cisi_pd_motor',
                     'CISI-PD Disability': 'code_cisi_pd_disability',
@@ -297,7 +297,7 @@ class MDS_UPDRS_PT1(AppConfig):
         return df
     
 class MDS_UPDRS_PT2(AppConfig):
-    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1gUX4LV38DZj6fBmRI8zQGFkkO3U6LQik-yxWZ70Ehkw/edit?gid=0#gid=0'
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1H19omXH-NmvYSpf6jtc5eJwEG2Teu20f/edit?usp=sharing&ouid=100575740984202823884&rtpof=true&sd=true'
     OPTIONAL_COLS = ["mds_updrs_part_ii_primary_info_source"]
     STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
     OUTCOMES_DICT = {"Speech (UPD2201)": "code_upd2201_speech",
@@ -318,10 +318,10 @@ class MDS_UPDRS_PT2(AppConfig):
     NUMERIC_RANGES = {'mds_updrs_part_ii_summary_score': [0, 52]}
 
     def config_MDS_UPDRS_PT2(self):
-        pt3_ss = AppConfig.SESSION_STATES.copy()
+        pt2_ss = AppConfig.SESSION_STATES.copy()
         var_list = list(MDS_UPDRS_PT2.OUTCOMES_DICT.keys())
-        pt3_ss['variable'] = var_list
-        super().config_variables(pt3_ss)
+        pt2_ss['variable'] = var_list
+        super().config_variables(pt2_ss)
 
     def check_required(self, df):
         return super().missing_required(df, list(MDS_UPDRS_PT2.OUTCOMES_DICT.values()))
@@ -366,7 +366,7 @@ class MDS_UPDRS_PT2(AppConfig):
         return df
     
 class MDS_UPDRS_PT3(AppConfig):
-    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1FcZXKpr0PsYfUGrONX9SUzCNb6afezvxq79dTBKBvZg/edit?gid=2129228836#gid=2129228836'
+    TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1sHFYEts214rLzoRfCxJjzaZ84TbCh5L3/edit?usp=sharing&ouid=100575740984202823884&rtpof=true&sd=true'
     OPTIONAL_COLS = ["upd23a_medication_for_pd", "upd23b_clinical_state_on_medication", "upd23c_on_levodopa"]
     STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
     OUTCOMES_DICT = {"Speech Problems (UPD2301)": "code_upd2301_speech_problems",
