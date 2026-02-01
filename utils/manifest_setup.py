@@ -70,21 +70,35 @@ class ManifestConfig():
         # Only include relevant columns for comparison
         unequal_df = self.df[list(unequal_cols)]
 
-        # Find rows where numerical differences exceed 1
+        # Find rows where numerical differences exceed 1 or one side is missing and the other isn't
         diff_num = unequal_df.apply(lambda row: any(
-            abs(row[unequal_num[i]] - row[unequal_num[i + 1]]) > 1 
+            (
+                # one missing, one not missing => count as different
+                (pd.isna(row[unequal_num[i]]) != pd.isna(row[unequal_num[i + 1]]))
+                or
+                # both present => compare numeric difference
+                (
+                    pd.notna(row[unequal_num[i]]) and pd.notna(row[unequal_num[i + 1]]) and
+                    abs(float(row[unequal_num[i]]) - float(row[unequal_num[i + 1]])) > 1
+                )
+            )
             for i in range(0, len(unequal_num), 2)
         ), axis=1) if unequal_num else False
-        
-        # Find rows where categorical values differ
+
+        # Find rows where categorical values differ, treating missing vs non-missing as different too
         diff_cat = unequal_df.apply(lambda row: any(
-            row[unequal_cat[i]] != row[unequal_cat[i + 1]] 
+            (pd.isna(row[unequal_cat[i]]) != pd.isna(row[unequal_cat[i + 1]]))
+            or
+            (
+                pd.notna(row[unequal_cat[i]]) and pd.notna(row[unequal_cat[i + 1]]) and
+                str(row[unequal_cat[i]]) != str(row[unequal_cat[i + 1]])
+            )
             for i in range(0, len(unequal_cat), 2)
         ), axis=1) if unequal_cat else False
 
         # Display only rows where values differ
         diff_rows = unequal_df[diff_num | diff_cat]
-        diff_rows.drop_duplicates(inplace=True)
+        diff_rows.drop_duplicates(subset = ['GP2ID'], inplace=True)
         return diff_rows
 
     def adjust_data(self, no_diff=True):

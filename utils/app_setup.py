@@ -367,7 +367,8 @@ class MDS_UPDRS_PT2(AppConfig):
     
 class MDS_UPDRS_PT3(AppConfig):
     TEMPLATE_LINK = 'https://docs.google.com/spreadsheets/d/1sHFYEts214rLzoRfCxJjzaZ84TbCh5L3/edit?usp=sharing&ouid=100575740984202823884&rtpof=true&sd=true'
-    OPTIONAL_COLS = ["upd23a_medication_for_pd", "upd23b_clinical_state_on_medication", "upd23c_on_levodopa"]
+    OPTIONAL_COLS = ["upd23a_medication_for_pd", "upd23b_clinical_state_on_medication", "upd23c_on_levodopa", 
+                    "upd2da_dyskinesias_during_exam", "upd2db_movements_interfere_with_ratings"]
     STRAT_VALS = {'GP2 Phenotype': 'GP2_phenotype', 'GP2 PHENO': 'GP2_PHENO', 'Study Arm': 'study_arm'}
     OUTCOMES_DICT = {"Speech Problems (UPD2301)": "code_upd2301_speech_problems",
                     "Facial Expression (UPD2302)": "code_upd2302_facial_expression",
@@ -402,8 +403,6 @@ class MDS_UPDRS_PT3(AppConfig):
                     "Rest Tremor Amplitude Left Lower Extremity (UPD2317D)": "code_upd2317d_rest_tremor_amplitude_left_lower_extremity",
                     "Rest Tremor Amplitude Lip Or Jaw (UPD2317E)": "code_upd2317e_rest_tremor_amplitude_lip_or_jaw",
                     "Consistency Of Rest Tremor (UPD2318)": "code_upd2318_consistency_of_rest_tremor",
-                    "Dyskinesias During Exam (UPD2DA)": "upd2da_dyskinesias_during_exam",
-                    "Movements Interfere with Ratings (UPD2DB)": "upd2db_movements_interfere_with_ratings",
                     "MDS-UPDRS Part III Summary Score": "mds_updrs_part_iii_summary_score"}
     NUMERIC_RANGE = [0, 4]
     NUMERIC_RANGES = {'upd23c1_min_since_last_levodopa': [0, 1440], 'mds_updrs_part_iii_summary_score': [0, 132]}
@@ -426,6 +425,18 @@ class MDS_UPDRS_PT3(AppConfig):
 
         # If data type errors exist, return them instead of checking ranges
         if 'Invalid Data Types' in out_of_range:
+            return out_of_range
+
+        # Validate numeric types for individual score columns (not covered in NUMERIC_RANGES)
+        invalid_types = {}
+        indiv_cols_typecheck = list(MDS_UPDRS_PT3.OUTCOMES_DICT.values())
+        for col in indiv_cols_typecheck:
+            if col in df.columns:
+                non_numeric_values = df[~df[col].apply(lambda x: isinstance(x, (int, float, np.number)) | pd.isna(x))][col]
+                if not non_numeric_values.empty:
+                    invalid_types[col] = non_numeric_values.tolist()
+        if invalid_types:
+            out_of_range['Invalid Data Types'] = invalid_types
             return out_of_range
 
         # Only focus on individual input cols

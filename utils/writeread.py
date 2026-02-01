@@ -73,6 +73,8 @@ def read_file(data_file):
     elif data_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
         df = pd.read_excel(data_file, sheet_name=0, dtype={
                            'clinical_id': 'str', 'sample_id': 'str'})
+    df = df.drop(columns=['Unnamed: 0'], errors='ignore')
+
     return (df)
 
 
